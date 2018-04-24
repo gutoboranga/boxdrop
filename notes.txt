@@ -1,0 +1,5 @@
+- Para compilar o client:
+
+gcc -g -c src/dropboxClient.c -I include -o bin/dropboxClient
+gcc -g testes/main.c bin/dropboxClient -I include -o testes/main
+./testes/main
