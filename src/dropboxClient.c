@@ -5,8 +5,8 @@
 #include <stdio.h>
 
 int login_server(char *host, int port) {
-  
-  return ERROR;
+  // a ser implementada
+  return SUCCESS;
 }
 
 void sync_client() {
@@ -18,7 +18,7 @@ void send_file(char *file) {
 void get_file(char *file) {
 }
 
-void delete_file(char *filet) {
+void delete_file(char *file) {
 }
 
 void close_session() {
@@ -30,17 +30,14 @@ int main(int argc, char *argv[]) {
       return ERROR;
    }
    
-   char *user = argv[1];
    char *adress = argv[2];
    int door = atoi(argv[3]);
    
-   printf("User: %s\n", user);
-   printf("Adress: %s\n", adress);
-   printf("Door: %i\n\n", door);
-   
-   
-   // conecta com o servidor, provavelmente através de
-   // login_server();
+   // tenta conectar com o servidor
+   if (login_server(adress, door) == ERROR) {
+     // printf(CLIENT_ERROR_LOGGING_IN, adress, door);
+     return ERROR;
+   }
    
    // chama get_sync_dir().
    // o servidor verificará se o diretório “sync_dir_<nomeusuário>”
