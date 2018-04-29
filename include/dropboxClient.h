@@ -28,9 +28,11 @@ void close_session ();
 #define CLIENT_EXIT_CMD "exit"
 
 //--------------------------------------------------------------------------------
-// Errors
+// Messages
 //--------------------------------------------------------------------------------
 
-#define CLIENT_INVALID_PARAMS_NUMBER "[ERRO] Número inválido de argumentos. O uso correto é:\n\n\t$ ./bin/dropboxClient user endereco porta\n\n"
+#define CLIENT_INVALID_PARAMS_NUMBER "\n[ERRO] Número inválido de argumentos. O uso correto é:\n\n\t$ ./bin/dropboxClient user endereco porta\n\n"
+#define CLIENT_INVALID_COMMAND "\n[ERRO] Comando inválido.\n"
+#define CLIENT_COMMANDS_HELP "Os comandos disponíveis são:\n\n\t> upload <path/filename.ext>\n\t> download <filename.ext>\n\t> list_server\n\t> list_client\n\t> get_sync_dir\n\t> exit\n\n"
 
 #endif
