@@ -3,3 +3,13 @@
 gcc -g -c src/dropboxClient.c -I include -o bin/dropboxClient
 gcc -g testes/main.c bin/dropboxClient -I include -o testes/main
 ./testes/main
+
+
+- Pra criar arquivo e escrever nele:
+
+FILE * fp;
+
+fp = fopen (path, "w+");
+fprintf(fp, "%s %s %s %d", "We", "are", "in", 2018);
+
+fclose(fp);

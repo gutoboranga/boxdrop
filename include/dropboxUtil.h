@@ -7,9 +7,15 @@
 
 #define MAXNAME 50
 #define MAXFILES 10
+#define PATH_MAX_SIZE 150
 
 #define SUCCESS 0
 #define ERROR -1
+
+#define FALSE 0
+#define TRUE 1
+
+#define BASE_DIR_PATH "/home/sync_dir_"
 
 //--------------------------------------------------------------------------------
 // Structs
@@ -33,6 +39,8 @@ typedef struct client {
 // Functions
 //--------------------------------------------------------------------------------
 
-void readCommand(char *command, char *argument, int size);
+void read_command(char *command, char *argument, int size);
+char *build_user_dir_path(char *username);
+int dir_exists(char *path);
 
 #endif

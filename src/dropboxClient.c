@@ -1,5 +1,6 @@
 #include <dropboxClient.h>
 #include <dropboxUtil.h>
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -24,35 +25,48 @@ void delete_file(char *file) {
 void close_session() {
 }
 
+void get_sync_dir(char *user) {
+  // cria uma string com o path completo "/home/sync_dir_<USER NAME>"
+  char *path = build_user_dir_path(user);
+  
+  // se não existe o dir ainda, cria
+  if(!dir_exists(path)) {
+    mkdir(path, S_IRWXU | S_IRWXG | S_IRWXO);
+  }
+  
+  // let it go
+  free(path);
+}
+
 int main(int argc, char *argv[]) {
   if(argc != CLIENT_PARAMS_NUMBER) {
       printf(CLIENT_INVALID_PARAMS_NUMBER);
       return ERROR;
    }
    
+   char *user = argv[1];
    char *adress = argv[2];
    int door = atoi(argv[3]);
    
-   // tenta conectar com o servidor
+   // Tenta conectar com o servidor
    if (login_server(adress, door) == ERROR) {
      // printf(CLIENT_ERROR_LOGGING_IN, adress, door);
      return ERROR;
    }
    
-   // chama get_sync_dir().
-   // o servidor verificará se o diretório “sync_dir_<nomeusuário>”
-   // existe no dispositivo do cliente, e criá-lo se necessário.
-   // A sincronização dos arquivos deverá ser efetuada
+   // Chamada para ver se o diretorio do usuario existe na máquina local
+   // do client (se não, o cria) e sincronizar com o servidor
+   get_sync_dir(user);
    
+   // Início da linha de comando para o usuário:
+   // fica lendo os comandos até rolar um exit, daí acaba tudo
    char *command = malloc(sizeof(char) * CLIENT_COMMAND_MAX_SIZE);;
    char *argument = malloc(sizeof(char) * CLIENT_COMMAND_MAX_SIZE);;
    
-   // entra num loop de ficar lendo os comandos do usuário até
-   // ele mandar um exit, daí acaba tudo
    while(1) {
      printf("> ");
      
-     readCommand(command, argument, CLIENT_COMMAND_MAX_SIZE);
+     read_command(command, argument, CLIENT_COMMAND_MAX_SIZE);
      
      // confere cada possível comando:
      if (strcmp(command, CLIENT_EXIT_CMD) == 0) {
@@ -94,6 +108,9 @@ int main(int argc, char *argv[]) {
        printf(CLIENT_COMMANDS_HELP);
      }
    }
+   
+   free(command);
+   free(argument);
    
    return SUCCESS;
 }

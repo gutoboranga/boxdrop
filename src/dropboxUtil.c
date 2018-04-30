@@ -1,9 +1,10 @@
 #include <dropboxUtil.h>
+#include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 
-void readCommand(char *command, char *argument, int size) {
+void read_command(char *command, char *argument, int size) {
   fgets(command, size, stdin);
   
   int last_index = strlen(command) - 1;
@@ -25,4 +26,24 @@ void readCommand(char *command, char *argument, int size) {
   
   // copia de aux pra argument
   strcpy(argument, aux);
+}
+
+char *build_user_dir_path(char *user) {
+  char *path;
+  
+  path = malloc(sizeof(char) * PATH_MAX_SIZE);
+  strcpy(path, BASE_DIR_PATH);
+  strcat(path, user);
+  
+  return path;
+}
+
+int dir_exists(char *path) {
+  struct stat st = {0};
+
+  if (stat(path, &st) == -1) {
+      return FALSE;
+  }
+  
+  return TRUE;
 }
