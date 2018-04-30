@@ -29,4 +29,10 @@ typedef struct client {
   int logged_in;
 } client_t;
 
+//--------------------------------------------------------------------------------
+// Functions
+//--------------------------------------------------------------------------------
+
+void readCommand(char *command, char *argument, int size);
+
 #endif

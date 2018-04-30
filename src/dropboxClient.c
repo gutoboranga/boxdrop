@@ -44,29 +44,40 @@ int main(int argc, char *argv[]) {
    // existe no dispositivo do cliente, e criá-lo se necessário.
    // A sincronização dos arquivos deverá ser efetuada
    
-   char command[MAXNAME];
+   char *command = malloc(sizeof(char) * CLIENT_COMMAND_MAX_SIZE);;
+   char *argument = malloc(sizeof(char) * CLIENT_COMMAND_MAX_SIZE);;
    
    // entra num loop de ficar lendo os comandos do usuário até
    // ele mandar um exit, daí acaba tudo
    while(1) {
      printf("> ");
      
-     // lê um comando do teclado com fgets e remove um \n que ela coloca no final
-     fgets(command, MAXNAME, stdin);
-     int last_index = strlen(command) - 1;
-     if (command[last_index] == '\n') command[last_index] = 0;
+     readCommand(command, argument, CLIENT_COMMAND_MAX_SIZE);
      
-     // confere cada possível comando
+     // confere cada possível comando:
      if (strcmp(command, CLIENT_EXIT_CMD) == 0) {
-       // faz alugm tipo de logout
+       // faz logout do sistema e retorna
        return SUCCESS;
      }
      
-     // upload e download tem que fazer um strtok no command pois eles possuem um parametro
      else if (strcmp(command, CLIENT_UPLOAD_CMD) == 0) {
+       // garante que argument não é inválido
+       if (strcmp(argument, "") == 0) {
+         printf(CLIENT_UPLOAD_CMD_MISSING_ARGUMENT);
+         continue;
+       }
+       
+       // aqui sim faz o que deve ser feito
      }
      
      else if (strcmp(command, CLIENT_DOWNLOAD_CMD) == 0) {
+       // garante que argument não é inválido
+       if (strcmp(argument, "") == 0) {
+         printf(CLIENT_DOWNLOAD_CMD_MISSING_ARGUMENT);
+         continue;
+       }
+       
+       // aqui sim faz o que deve ser feito
      }
      
      else if (strcmp(command, CLIENT_LIST_SERVER_CMD) == 0) {
