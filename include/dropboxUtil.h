@@ -48,7 +48,8 @@ typedef struct message {
   int type;                        // tipo do mensagem
   int size;                        // tamanho da parte de dados do mensagem
   char data[MAX_PACKAGE_DATA_LENGTH];   // parte de dados propriamente dita
-  file_info_t file;                     // info a respeito do arquivo sendo enviado/recebido
+  char filename[MAXNAME];
+  // file_info_t file;                     // info a respeito do arquivo sendo enviado/recebido
 } message_t;
 
 // header_message representa a primeira de uma série de mensagens.
@@ -74,5 +75,7 @@ void read_command(char *command, char *argument, int size);
 char *build_user_dir_path(char *username);
 int dir_exists(char *path);
 int read_file_content(char *filename, char *buffer, int start_index, int size);
+int write_to_file(char *filename, char *content);
+int file_exists(char *file);
 
 #endif

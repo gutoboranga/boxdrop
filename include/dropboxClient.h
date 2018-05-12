@@ -41,4 +41,8 @@ void close_session ();
 #define CLIENT_UPLOAD_CMD_MISSING_ARGUMENT "\n[ERRO] O comando upload deve receber um parâmetro:\n\n\t> upload <path/filename.ext>\n\n"
 #define CLIENT_DOWNLOAD_CMD_MISSING_ARGUMENT "\n[ERRO] O comando download deve receber um parâmetro:\n\n\t> download <filename.ext>\n\n"
 
+#define CLIENT_UPLOAD_SUCCESS "  Arquivo %s enviado com sucesso!\n"
+
+#define CLIENT_UPLOAD_NO_SUCH_FILE "  [ERRO] O arquivo %s não foi encontrado.\n"
+
 #endif

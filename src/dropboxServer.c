@@ -55,18 +55,24 @@ int main(int argc, char *argv[]) {
     
     // se recebeu uma mensagem que vai receber um arquivo
     if (msg->type == MSG_TYPE_SEND_FILE) {
-      printf(">> datagram told me client will upload file %s. I'm ready!\n\n", msg->file.name);
+      printf(">> datagram told me client will upload file %s. I'm ready!\n\n", msg->filename);
       
-      n = sendto(sockfd, "Hit me with this file!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
+      n = sendto(sockfd, "ok, send file!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
   		if (n  < 0)
   			printf("ERROR on sendto");
     }
     
     // se recebeu dados
     else if (msg->type == MSG_TYPE_DATA) {
-      printf(">> datagram with data:\n%s\n\n", msg->data);
+      char data_on_right_size[MAX_PACKAGE_DATA_LENGTH + 1];
+      memcpy(data_on_right_size, msg->data, msg->size);
+      data_on_right_size[msg->size] = '\0';
       
-      n = sendto(sockfd, "Got some data\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
+      printf(">> datagram with data:\n%s\nfilename: %s\n", data_on_right_size, msg->filename);
+      
+      write_to_file(msg->filename, data_on_right_size);
+      
+      n = sendto(sockfd, "got data!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
   		if (n  < 0)
   			printf("ERROR on sendto");
     
@@ -78,7 +84,7 @@ int main(int argc, char *argv[]) {
   			printf("ERROR on sendto");
     }
     
-    // printf("Received:\n\ttype: %i\n\tsize: %i\n\tfilename: %s\n", msg->type, msg->size, msg->file.name);
+    // printf("Received:\n\ttype: %i\n\tsize: %i\n\tfilename: %s\n", msg->type, msg->size, msg->filename);
     
   }
       

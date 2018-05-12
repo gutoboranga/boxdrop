@@ -61,3 +61,27 @@ int read_file_content(char *filename, char *buffer, int start_index, int size) {
   
   return amount_read;
 }
+
+int write_to_file(char *filename, char *content) {
+  FILE *file = fopen(filename, "a+");
+  
+  if (!file) {
+    return ERROR;
+  }
+  
+  fprintf(file, "%s", content);
+  fclose(file);
+  
+  return SUCCESS;
+}
+
+int file_exists(char *filename) {
+  FILE *file = fopen(filename, "r");
+  
+  if (!file) {
+    return FALSE;
+  }
+  
+  fclose(file);
+  return TRUE;
+}
