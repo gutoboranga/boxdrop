@@ -85,3 +85,10 @@ int file_exists(char *filename) {
   fclose(file);
   return TRUE;
 }
+
+void config_message(message_t *message, int type, int size, char *data, char *filename) {
+  message->type = type;
+  message->size = size;
+  memcpy(message->data, data, MAX_PACKAGE_DATA_LENGTH);
+  strcpy(message->filename, filename);
+}

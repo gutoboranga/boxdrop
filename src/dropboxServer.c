@@ -36,16 +36,14 @@ int send_file(char *file) {
   // e os enviando para o servidor
   while(!done_reading) {
     int chars_read = read_file_content(file, buffer, start_index, MAX_PACKAGE_DATA_LENGTH);
+    printf("READ:\n%.128s\n-------------\n", buffer);
     
     start_index += chars_read;
   
     // se leu alguma coisa at all
     if (chars_read > 0) {
-      message.type = MSG_TYPE_DATA;
-      message.size = chars_read;
-      strcpy(message.filename, file);
-      memcpy(message.data, buffer, MAX_PACKAGE_DATA_LENGTH);
-  
+      config_message(&message, MSG_TYPE_DATA, chars_read, (char *) &buffer, file);
+      
       memcpy(message_buffer, &message, sizeof(message));
   
       n = sendto(socket_fd, message_buffer, sizeof(message_buffer), 0, (struct sockaddr *) &client_address, sizeof(struct sockaddr));
@@ -68,7 +66,7 @@ int send_file(char *file) {
   }
   
   // quando acabar, envia uma última mensagem ao cliente avisando que acabou de mandar todo o arquivo
-  message.type = MSG_END_OF_TRANSMISSION;
+  config_message(&message, MSG_END_OF_TRANSMISSION, 0, "", file);
   memcpy(message_buffer, &message, sizeof(message));
   
   n = sendto(socket_fd, message_buffer, sizeof(message_buffer), 0, (const struct sockaddr *) &client_address, sizeof(struct sockaddr_in));
@@ -108,8 +106,9 @@ int main(int argc, char *argv[]) {
   client_address = cli_addr;
   client_length = clilen;
   
+  char message_buffer[sizeof(message_t)];
+  
 	while (1) {
-    char message_buffer[sizeof(message_t)];
     
 		/* receive from socket */
 		n = recvfrom(sockfd, message_buffer, sizeof(message_t), 0, (struct sockaddr *) &cli_addr, &clilen);
@@ -120,8 +119,6 @@ int main(int argc, char *argv[]) {
     
     // se recebeu uma mensagem que vai receber um arquivo
     if (msg->type == MSG_TYPE_SEND_FILE) {
-      printf(">> datagram told me client will upload file %s. I'm ready!\n\n", msg->filename);
-      
       n = sendto(sockfd, "ok, send file!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
   		if (n  < 0)
   			printf("ERROR on sendto");

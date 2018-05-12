@@ -74,11 +74,8 @@ int send_file(char *file) {
   
     // se leu alguma coisa at all
     if (chars_read > 0) {
-      message.type = MSG_TYPE_DATA;
-      message.size = chars_read;
-      strcpy(message.filename, file);
-      memcpy(message.data, buffer, MAX_PACKAGE_DATA_LENGTH);
-  
+      config_message(&message, MSG_TYPE_DATA, chars_read, (char *) &buffer, file);
+      
       memcpy(message_buffer, &message, sizeof(message));
   
       int n = sendto(socket_identifier, message_buffer, sizeof(message_buffer), 0, (const struct sockaddr *) &server_address, sizeof(struct sockaddr_in));
@@ -111,10 +108,9 @@ int get_file(char *file) {
   
   // cria uma mensagem do tipo MSG_TYPE_GET_FILE, para indicar ao servidor que quer baixar o tal arquivo
   message_t message;
-  strcpy(message.filename, file);
-  message.type = MSG_TYPE_GET_FILE;
-  message.size = 0;
-
+  config_message(&message, MSG_TYPE_GET_FILE, 0, "", file);
+  
+  // "serializa" a struct mensagem para enviar pelo socket
   memcpy(message_buffer, &message, sizeof(message));
   
   // envia a mensagem pro servidor
@@ -151,8 +147,9 @@ int get_file(char *file) {
   
   // enquanto houver coisa para receber
   while (!received_all) {
+    
     // espera receber um pedaço de arquivo
-    n = recvfrom(socket_identifier, ack_buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &from, &length);
+    n = recvfrom(socket_identifier, ack_buffer, sizeof(message_t), 0, (struct sockaddr *) &from, &length);
     if (n < 0) {
       printf("ERROR recvfrom");
       return ERROR;
@@ -169,6 +166,8 @@ int get_file(char *file) {
     char data_on_right_size[MAX_PACKAGE_DATA_LENGTH + 1];
     memcpy(data_on_right_size, msg->data, msg->size);
     data_on_right_size[msg->size] = '\0';
+    
+    printf("RECEBIDO:\nsize: %i\n%.128s\n---------------\n", msg->size, data_on_right_size);
     
     // escreve no arquivo
     write_to_file(full_path, data_on_right_size);

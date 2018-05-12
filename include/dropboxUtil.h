@@ -53,20 +53,6 @@ typedef struct message {
   // file_info_t file;                     // info a respeito do arquivo sendo enviado/recebido
 } message_t;
 
-// header_message representa a primeira de uma série de mensagens.
-// Serve por exemplo, para especificar ao servidor que tipo de serviço o cliente requer.
-typedef struct header_message {
-  int type;                             // tipo da mensagem
-  file_info_t file;                     // info a respeito do arquivo sendo enviado/recebido
-} header_message_t;
-
-// data_message representa a uma mensagem com dados puros.
-typedef struct data_message {
-  int id;                               // identificador do mensagem
-  int size;                             // tamanho válido da parte de dados do mensagem
-  char data[MAX_PACKAGE_DATA_LENGTH];   // parte de dados propriamente dita
-} data_message_t;
-
 
 //--------------------------------------------------------------------------------
 // Functions
@@ -78,5 +64,6 @@ int dir_exists(char *path);
 int read_file_content(char *filename, char *buffer, int start_index, int size);
 int write_to_file(char *filename, char *content);
 int file_exists(char *file);
+void config_message(message_t *message, int type, int size, char *data, char *filename);
 
 #endif
