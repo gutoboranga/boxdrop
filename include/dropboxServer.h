@@ -5,6 +5,13 @@
 
 void sync_server();
 void receive_file(char *file);
-void send_file(char *file);
+int send_file(char *file);
+
+//--------------------------------------------------------------------------------
+// Messages
+//--------------------------------------------------------------------------------
+
+#define SERVER_FILE_NOT_FOUND "  [ERRO] O arquivo requisitado não foi encontrado no servidor.\n"
+
 
 #endif

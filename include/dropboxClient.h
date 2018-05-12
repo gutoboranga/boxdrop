@@ -6,7 +6,7 @@
 int login_server(char *host, int port);
 void sync_client();
 int send_file(char *file);
-void get_file(char *file);
+int get_file(char *file);
 void delete_file(char *file);
 void close_session ();
 
@@ -42,6 +42,8 @@ void close_session ();
 #define CLIENT_DOWNLOAD_CMD_MISSING_ARGUMENT "\n[ERRO] O comando download deve receber um parâmetro:\n\n\t> download <filename.ext>\n\n"
 
 #define CLIENT_UPLOAD_SUCCESS "  Arquivo %s enviado com sucesso!\n"
+
+#define CLIENT_DOWNLOAD_SUCCESS "  Arquivo %s baixado com sucesso!\n"
 
 #define CLIENT_UPLOAD_NO_SUCH_FILE "  [ERRO] O arquivo %s não foi encontrado.\n"
 

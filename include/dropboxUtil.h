@@ -24,6 +24,7 @@
 #define MSG_TYPE_GET_FILE 1
 #define MSG_TYPE_SYNC 2
 #define MSG_TYPE_DATA 3
+#define MSG_END_OF_TRANSMISSION 4
 
 //--------------------------------------------------------------------------------
 // Structs

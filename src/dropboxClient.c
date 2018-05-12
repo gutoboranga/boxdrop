@@ -11,6 +11,9 @@
 #include <string.h>
 #include <stdio.h>
 
+char *username;
+char *adress;
+int door;
 int socket_identifier;
 struct sockaddr_in server_address;
 
@@ -52,6 +55,7 @@ int send_file(char *file) {
   char buffer[MAX_PACKAGE_DATA_LENGTH];
   char ack_buffer[MAX_PACKAGE_DATA_LENGTH];
   char message_buffer[sizeof(message_t)];
+  message_t message;
   
   struct sockaddr_in from;
   unsigned int length = sizeof(struct sockaddr_in);
@@ -61,6 +65,8 @@ int send_file(char *file) {
     return ERROR;
   }
   
+  // enquanto houver coisa para ler no arquivo, vai lendo ele aos pedacinhos (de tamanho MAX_PACKAGE_DATA_LENGTH = 128)
+  // e os enviando para o servidor
   while(!done_reading) {
     int chars_read = read_file_content(file, buffer, start_index, MAX_PACKAGE_DATA_LENGTH);
     
@@ -68,7 +74,6 @@ int send_file(char *file) {
   
     // se leu alguma coisa at all
     if (chars_read > 0) {
-      message_t message;
       message.type = MSG_TYPE_DATA;
       message.size = chars_read;
       strcpy(message.filename, file);
@@ -98,34 +103,88 @@ int send_file(char *file) {
   return SUCCESS;
 }
 
-void get_file(char *file) {
-  // message_t message;
-  // message.file = f;
-  // message.type = MSG_TYPE_DATA;
-  // message.size = chars_read;
-  // memcpy(message.data, buffer, MAX_PACKAGE_DATA_LENGTH);
-  //
-  // memcpy(message_buffer, &message, sizeof(message));
-  //
-  // int n = sendto(socket_identifier, message_buffer, sizeof(message_buffer), 0, (const struct sockaddr *) &server_address, sizeof(struct sockaddr_in));
-  // if (n < 0) {
-  //   printf("ERROR sendto");
-  //   // return ERROR;
-  // }
-  //
-  // n = recvfrom(socket_identifier, ack_buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &from, &length);
-  // if (n < 0) {
-  //   printf("ERROR recvfrom");
-  //   // return ERROR;
-  // }
-  // envia uma mensagem pro servidor pedindo o tal arquivo
+int get_file(char *file) {
+  char message_buffer[sizeof(message_t)];
+  char ack_buffer[sizeof(message_t)];
+  struct sockaddr_in from;
+  unsigned int length = sizeof(struct sockaddr_in);
   
-  // aguarda resultado
+  // cria uma mensagem do tipo MSG_TYPE_GET_FILE, para indicar ao servidor que quer baixar o tal arquivo
+  message_t message;
+  strcpy(message.filename, file);
+  message.type = MSG_TYPE_GET_FILE;
+  message.size = 0;
+
+  memcpy(message_buffer, &message, sizeof(message));
   
-  // se deu erro / nao existe, return ERROR
+  // envia a mensagem pro servidor
+  int n = sendto(socket_identifier, message_buffer, sizeof(message_buffer), 0, (const struct sockaddr *) &server_address, sizeof(struct sockaddr_in));
+  if (n < 0) {
+    printf("ERROR sendto");
+    return ERROR;
+  }
   
-  // senão, em seguida vai receber várias mensagens contendo pedaços do arquivo, dentro
-  // de um loop em que recebe msg, escreve no arquivo o pedaço recebido, envia ack
+  // espera uma resposta dizendo se está tudo ok (arquivo existe e tals)
+  n = recvfrom(socket_identifier, ack_buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &from, &length);
+  if (n < 0) {
+    printf("ERROR recvfrom");
+    return ERROR;
+  }
+  
+  // se a resposta não for "ok", é uma mensagem de erro. printa ela e retorna erro
+  if (strcmp(ack_buffer, "ok") != 0) {
+    printf("%s", ack_buffer);
+    return ERROR;
+  }
+  
+  // cria uma string c o path absoluto do arquivo de destino
+  char *full_path = malloc(sizeof(char) * PATH_MAX_SIZE);
+  full_path = build_user_dir_path(username);
+  strcat(full_path, "/");
+  strcat(full_path, file);
+  
+  message_t *msg = malloc(sizeof(message_t));
+  int received_all = 0;
+  
+  // antes de receber os dados do arquivo, envia uma mensagem pra manter dualidade envia/recebe
+  n = sendto(socket_identifier, "só vem", sizeof(message_buffer), 0, (const struct sockaddr *) &server_address, sizeof(struct sockaddr_in));
+  
+  // enquanto houver coisa para receber
+  while (!received_all) {
+    // espera receber um pedaço de arquivo
+    n = recvfrom(socket_identifier, ack_buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &from, &length);
+    if (n < 0) {
+      printf("ERROR recvfrom");
+      return ERROR;
+    }
+    memcpy(msg, ack_buffer, sizeof(message_t));
+    
+    // se chegar uma mesganem de fim de transmissão quer dizer que deve sair do loop
+    if (msg->type == MSG_END_OF_TRANSMISSION) {
+      received_all = TRUE;
+      continue;
+    }
+    
+    // pega apenas a parte importante da área de dados da mensagem
+    char data_on_right_size[MAX_PACKAGE_DATA_LENGTH + 1];
+    memcpy(data_on_right_size, msg->data, msg->size);
+    data_on_right_size[msg->size] = '\0';
+    
+    // escreve no arquivo
+    write_to_file(full_path, data_on_right_size);
+    
+    // envia a mensagem de ok pro servidor
+    int n = sendto(socket_identifier, "ok", sizeof(message_buffer), 0, (const struct sockaddr *) &server_address, sizeof(struct sockaddr_in));
+    if (n < 0) {
+      printf("ERROR sendto");
+      return ERROR;
+    }
+  }
+  
+  free(full_path);
+  free(msg);
+  
+  return SUCCESS;
 }
 
 void delete_file(char *file) {
@@ -155,9 +214,9 @@ int main(int argc, char *argv[]) {
       return ERROR;
    }
    
-   char *user = argv[1];
-   char *adress = argv[2];
-   int door = atoi(argv[3]);
+   username = argv[1];
+   adress = argv[2];
+   door = atoi(argv[3]);
    
    // Tenta conectar com o servidor
    int id = login_server(adress, door);
@@ -171,7 +230,7 @@ int main(int argc, char *argv[]) {
    
    // Chamada para ver se o diretorio do usuario existe na máquina local
    // do client (se não, o cria) e sincronizar com o servidor
-   get_sync_dir(user);
+   get_sync_dir(username);
    
    // Início da linha de comando para o usuário:
    // fica lendo os comandos até rolar um exit, daí acaba tudo
@@ -210,6 +269,9 @@ int main(int argc, char *argv[]) {
          continue;
        }
        
+       if (get_file(argument) == SUCCESS) {
+         printf(CLIENT_DOWNLOAD_SUCCESS, argument);
+       }
        // aqui sim faz o que deve ser feito
      }
      

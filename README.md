@@ -15,3 +15,10 @@ To execute client, run (with valid parameters):
 ```
 ./bin/dropboxClient usuario endereco porta
 ```
+
+To execute server, run:
+
+```
+cd bin/server
+./dropboxServer
+```
