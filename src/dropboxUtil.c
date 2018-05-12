@@ -47,3 +47,17 @@ int dir_exists(char *path) {
   
   return TRUE;
 }
+
+int read_file_content(char *filename, char *buffer, int start_index, int size) {
+  FILE *file = fopen(filename, "r");
+  
+  if (!file) {
+    return ERROR;
+  }
+  
+  fseek(file, start_index, SEEK_SET);
+  int amount_read = fread(buffer, 1, size, file);
+  fclose(file);
+  
+  return amount_read;
+}
