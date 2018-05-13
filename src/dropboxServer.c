@@ -81,36 +81,6 @@ int send_file(char *file) {
   return SUCCESS;
 }
 
-int ls(char *buffer) {
-  DIR *dir;
-  dir = opendir(user_dir_path);
-  
-  if (dir == NULL) {
-    return ERROR;
-  }
-  
-  struct dirent *ent;
-  int buffer_index = 0;
-  
-  strcpy(buffer, "");
-  
-  while ((ent = readdir(dir)) != NULL) {
-    // salva no buffer todas as entradas exceto . e ..
-    if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
-      strcpy(buffer + buffer_index, "  ");
-      buffer_index += 2;
-      
-      strcpy(buffer + buffer_index, ent->d_name);
-      buffer_index += strlen(ent->d_name);
-  
-      memcpy(buffer + buffer_index, "\n", 1);
-      buffer_index += 1;
-    }
-  }
-  closedir (dir);
-  
-  return SUCCESS;
-}
 
 int main(int argc, char *argv[]) {
 	int sockfd, n;
@@ -229,7 +199,7 @@ int main(int argc, char *argv[]) {
     else if (msg->type == MSG_TYPE_LIST_SERVER) {
       // chama ls (funçao implementada mais pra cima)
       char *buffer = malloc(sizeof(char) * MAX_PACKAGE_DATA_LENGTH);
-      ls(buffer);
+      ls(user_dir_path, buffer);
       
       // envia o resultado de volta para o cliente
       message_t message;

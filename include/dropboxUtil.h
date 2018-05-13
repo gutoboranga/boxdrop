@@ -69,5 +69,6 @@ int read_file_content(char *filename, char *buffer, int start_index, int size);
 int write_to_file(char *filename, char *content);
 int file_exists(char *file);
 void config_message(message_t *message, int type, int size, char *data, char *filename);
+int ls(char *dirpath, char *buffer);
 
 #endif

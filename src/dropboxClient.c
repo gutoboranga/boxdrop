@@ -225,6 +225,14 @@ void list_server() {
   printf("%s", msg->data);
 }
 
+void list_client() {
+  char *buffer = malloc(sizeof(char) * MAX_PACKAGE_DATA_LENGTH);
+  ls(build_user_dir_path(username), buffer);
+  
+  printf("%s", buffer);
+  
+  free(buffer);
+}
 
 void close_session() {
   close(socket_identifier);
@@ -318,9 +326,11 @@ int main(int argc, char *argv[]) {
      }
      
      else if (strcmp(command, CLIENT_LIST_CLIENT_CMD) == 0) {
+       list_client();
      }
      
      else if (strcmp(command, CLIENT_GET_SYNC_DYR_CMD) == 0) {
+       get_sync_dir(username);
      }
      
      else {

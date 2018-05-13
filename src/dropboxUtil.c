@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <dirent.h>
 
 void read_command(char *command, char *argument, int size) {
   fgets(command, size, stdin);
@@ -91,4 +92,35 @@ void config_message(message_t *message, int type, int size, char *data, char *fi
   message->size = size;
   memcpy(message->data, data, MAX_PACKAGE_DATA_LENGTH);
   strcpy(message->filename, filename);
+}
+
+int ls(char *dirpath, char *buffer) {
+  DIR *dir;
+  dir = opendir(dirpath);
+  
+  if (dir == NULL) {
+    return ERROR;
+  }
+  
+  struct dirent *ent;
+  int buffer_index = 0;
+  
+  strcpy(buffer, "");
+  
+  while ((ent = readdir(dir)) != NULL) {
+    // salva no buffer todas as entradas exceto . e ..
+    if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
+      strcpy(buffer + buffer_index, "  ");
+      buffer_index += 2;
+      
+      strcpy(buffer + buffer_index, ent->d_name);
+      buffer_index += strlen(ent->d_name);
+  
+      memcpy(buffer + buffer_index, "\n", 1);
+      buffer_index += 1;
+    }
+  }
+  closedir (dir);
+  
+  return SUCCESS;
 }
