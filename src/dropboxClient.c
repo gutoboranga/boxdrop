@@ -42,16 +42,14 @@ int login_server(char *host, int port) {
   
   server_address = s_address;
 
-  // // manda uma mensagem de login pro servidor
-  // message_t message;
-  // config_message(&message, MSG_TYPE_LOGIN, 0, username, "");
-  // send_message(socket_id, message);
-  //
-  // // espera a resposta (ack)
-  // char *ack_buffer;
-  // receive_message(socket_id, ack_buffer, MAX_PACKAGE_DATA_LENGTH);
-  //
-  // printf("ACK DO LOGIN: %s\n", ack_buffer);
+  // manda uma mensagem de login pro servidor
+  message_t message;
+  config_message(&message, MSG_TYPE_LOGIN, 0, username, "");
+  send_message(socket_id, message);
+  
+  // espera a resposta (ack)
+  char ack_buffer[MAX_PACKAGE_DATA_LENGTH];
+  receive_message(socket_id, ack_buffer, MAX_PACKAGE_DATA_LENGTH);
   
   return socket_id;
 }

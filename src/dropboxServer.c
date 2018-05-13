@@ -15,6 +15,7 @@ int socket_fd;
 socklen_t client_length;
 struct sockaddr_in client_address;
 char *username;
+char *user_dir_path;
 
 void sync_server() {
 }
@@ -87,6 +88,11 @@ int main(int argc, char *argv[]) {
 		
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) printf("ERROR opening socket");
 	
+  // inicializa username e user_dir_path
+  username = malloc(sizeof(char) * PATH_MAX_SIZE);
+  user_dir_path = malloc(sizeof(char) * PATH_MAX_SIZE);
+  strcpy(username, "");
+  strcpy(user_dir_path, "sync_dir_");
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(4000);
@@ -120,13 +126,25 @@ int main(int argc, char *argv[]) {
     
     // se recebeu uma mensagem de um client querendo fazer login
     if (msg->type == MSG_TYPE_LOGIN) {
-      printf("USERNAME: %s\n", msg->data);
+      printf("%s LOGGED IN\n", msg->data);
       
       n = sendto(sockfd, "ok", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
   		if (n  < 0)
   			printf("ERROR on sendto");
         
-      printf("Enviei direitinho...\n");
+      // salva o nome do usuario
+      strcpy(username, msg->data);
+      
+      // cria uma string com o path completo "sync_dir_<USER NAME>/"
+      strcat(user_dir_path, username);
+      strcat(user_dir_path, "/");
+      
+      printf("USER_DIR_PATH: %s\n", user_dir_path);
+      
+      // se não existe o dir ainda, cria
+      if(!dir_exists(user_dir_path)) {
+        mkdir(user_dir_path, S_IRWXU | S_IRWXG | S_IRWXO);
+      }
     }
     
     // se recebeu uma mensagem que vai receber um arquivo
@@ -144,7 +162,15 @@ int main(int argc, char *argv[]) {
       
       printf(">> datagram with data:\n%s\nfilename: %s\n", data_on_right_size, msg->filename);
       
-      write_to_file(msg->filename, data_on_right_size);
+      // cria um path juntando o "sync_dir_<USER NAME>/" com o nome do arquivo
+      char *filepath = malloc(sizeof(char) * PATH_MAX_SIZE);
+      strcpy(filepath, user_dir_path);
+      strcat(filepath, msg->filename);
+      
+      // escreve no arquivo
+      write_to_file(filepath, data_on_right_size);
+      
+      free(filepath);
       
       n = sendto(sockfd, "got data!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
   		if (n  < 0)
@@ -153,12 +179,19 @@ int main(int argc, char *argv[]) {
     
     // se recebeu requisição para enviar algum arquivo
     else if (msg->type == MSG_TYPE_GET_FILE) {
-      if (!file_exists(msg->filename)) {
+      // cria um path juntando o "sync_dir_<USER NAME>/" com o nome do arquivo
+      char *filepath = malloc(sizeof(char) * PATH_MAX_SIZE);
+      strcpy(filepath, user_dir_path);
+      strcat(filepath, msg->filename);
+      
+      if (!file_exists(filepath)) {
         n = sendto(sockfd, SERVER_FILE_NOT_FOUND, MAX_PACKAGE_DATA_LENGTH, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
       } else {
         n = sendto(sockfd, "ok", MAX_PACKAGE_DATA_LENGTH, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-        send_file(msg->filename);
+        send_file(filepath);
       }
+      
+      free(filepath);
     }
     
     // senão...
