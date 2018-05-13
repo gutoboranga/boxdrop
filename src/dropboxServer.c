@@ -93,8 +93,6 @@ int main(int argc, char *argv[]) {
   // inicializa username e user_dir_path
   username = malloc(sizeof(char) * PATH_MAX_SIZE);
   user_dir_path = malloc(sizeof(char) * PATH_MAX_SIZE);
-  strcpy(username, "");
-  strcpy(user_dir_path, "sync_dir_");
 
 	serv_addr.sin_family = AF_INET;
 	serv_addr.sin_port = htons(4000);
@@ -138,6 +136,7 @@ int main(int argc, char *argv[]) {
       strcpy(username, msg->data);
       
       // cria uma string com o path completo "sync_dir_<USER NAME>/"
+      strcpy(user_dir_path, "sync_dir_");
       strcat(user_dir_path, username);
       strcat(user_dir_path, "/");
       
@@ -164,10 +163,22 @@ int main(int argc, char *argv[]) {
       
       printf(">> datagram with data:\n%s\nfilename: %s\n", data_on_right_size, msg->filename);
       
+      char *file;
+      file = msg->filename;
+      char *tld = strrchr(msg->filename, '/');
+      if (tld != NULL) {
+        tld += 1;
+        file = tld;
+      }
+      printf("file: %s\n", file);
+      
       // cria um path juntando o "sync_dir_<USER NAME>/" com o nome do arquivo
       char *filepath = malloc(sizeof(char) * PATH_MAX_SIZE);
       strcpy(filepath, user_dir_path);
-      strcat(filepath, msg->filename);
+      strcat(filepath, file);
+      
+      // ver se tem / no filepath. se tiver, pegar apenas ultima parte, que é o nome do arquivo mesmo
+      printf("will write to: %s\n", filepath);
       
       // escreve no arquivo
       write_to_file(filepath, data_on_right_size);

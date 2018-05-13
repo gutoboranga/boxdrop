@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 
 char *username;
 char *adress;
@@ -300,6 +301,21 @@ int main(int argc, char *argv[]) {
          printf(CLIENT_UPLOAD_CMD_MISSING_ARGUMENT);
          continue;
        }
+       
+      // codigo pra printar timestamp da ultima modificacao do arquivo.
+      // quando for dar sync, ver se o timestamp last_modified do arquivo do servidor foi antes ou igual ao do cliente
+      
+      // se for < ou igual, pode enviar pra lá sem problemas, pois nao houve modificacoes sem que o cliente tivesse recebido
+      
+      // se for >, significa que no arquivo que está no servidor tem coisas que o cliente nao tem. dai tem que ver
+      //
+      
+       // struct tm *t;
+       // struct stat attrib;
+       //
+       //  stat(argument, &attrib);
+       //  t = localtime(&(attrib.st_mtime));
+       //  printf("%s last modified at:\n> %d/%d/%d_%d:%d:%d\n", argument, t->tm_mday, t->tm_mon + 1, t->tm_year + 1900, t->tm_hour, t->tm_min, t->tm_sec);
        
        if (send_file(argument) == SUCCESS) {
          printf(CLIENT_UPLOAD_SUCCESS, argument);
