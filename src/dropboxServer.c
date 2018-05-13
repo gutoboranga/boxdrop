@@ -14,6 +14,7 @@
 int socket_fd;
 socklen_t client_length;
 struct sockaddr_in client_address;
+char *username;
 
 void sync_server() {
 }
@@ -117,8 +118,19 @@ int main(int argc, char *argv[]) {
       
     memcpy(msg, message_buffer, sizeof(message_t));
     
+    // se recebeu uma mensagem de um client querendo fazer login
+    if (msg->type == MSG_TYPE_LOGIN) {
+      printf("USERNAME: %s\n", msg->data);
+      
+      n = sendto(sockfd, "ok", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
+  		if (n  < 0)
+  			printf("ERROR on sendto");
+        
+      printf("Enviei direitinho...\n");
+    }
+    
     // se recebeu uma mensagem que vai receber um arquivo
-    if (msg->type == MSG_TYPE_SEND_FILE) {
+    else if (msg->type == MSG_TYPE_SEND_FILE) {
       n = sendto(sockfd, "ok, send file!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
   		if (n  < 0)
   			printf("ERROR on sendto");

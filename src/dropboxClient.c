@@ -42,11 +42,53 @@ int login_server(char *host, int port) {
   
   server_address = s_address;
 
+  // // manda uma mensagem de login pro servidor
+  // message_t message;
+  // config_message(&message, MSG_TYPE_LOGIN, 0, username, "");
+  // send_message(socket_id, message);
+  //
+  // // espera a resposta (ack)
+  // char *ack_buffer;
+  // receive_message(socket_id, ack_buffer, MAX_PACKAGE_DATA_LENGTH);
+  //
+  // printf("ACK DO LOGIN: %s\n", ack_buffer);
+  
   return socket_id;
 }
 
+
 void sync_client() {
 }
+
+
+int send_message(int socket_id, message_t message) {
+  char message_buffer[sizeof(message_t)];
+  
+  // "serializa" a struct mensagem (como um buffer) para enviar pelo socket
+  memcpy(message_buffer, &message, sizeof(message));
+  
+  int n = sendto(socket_id, message_buffer, sizeof(message_buffer), 0, (const struct sockaddr *) &server_address, sizeof(struct sockaddr_in));
+  if (n < 0) {
+    printf("ERROR sendto\n");
+    return ERROR;
+  }
+  return SUCCESS;
+}
+
+
+int receive_message(int socket_id, char *buffer, int size) {
+  struct sockaddr_in from;
+  unsigned int length = sizeof(struct sockaddr_in);
+  
+  int n = recvfrom(socket_id, buffer, size, 0, (struct sockaddr *) &from, &length);
+  if (n < 0) {
+    printf("ERROR recvfrom\n");
+    return ERROR;
+  }
+  
+  return SUCCESS;
+}
+
 
 int send_file(char *file) {
   int done_reading = 0;
@@ -54,12 +96,10 @@ int send_file(char *file) {
   
   char buffer[MAX_PACKAGE_DATA_LENGTH];
   char ack_buffer[MAX_PACKAGE_DATA_LENGTH];
-  char message_buffer[sizeof(message_t)];
+  
   message_t message;
   
-  struct sockaddr_in from;
-  unsigned int length = sizeof(struct sockaddr_in);
-  
+  // se não existe o arquivo a ser enviado, erro
   if (!file_exists(file)) {
     printf(CLIENT_UPLOAD_NO_SUCH_FILE, file);
     return ERROR;
@@ -74,21 +114,12 @@ int send_file(char *file) {
   
     // se leu alguma coisa at all
     if (chars_read > 0) {
+      // envia mensagem com um pedaço do arquivo
       config_message(&message, MSG_TYPE_DATA, chars_read, (char *) &buffer, file);
+      send_message(socket_identifier, message);
       
-      memcpy(message_buffer, &message, sizeof(message));
-  
-      int n = sendto(socket_identifier, message_buffer, sizeof(message_buffer), 0, (const struct sockaddr *) &server_address, sizeof(struct sockaddr_in));
-      if (n < 0) {
-        printf("ERROR sendto");
-        return ERROR;
-      }
-  
-      n = recvfrom(socket_identifier, ack_buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &from, &length);
-      if (n < 0) {
-        printf("ERROR recvfrom");
-        return ERROR;
-      }
+      // espera um ack dizendo ok
+      receive_message(socket_identifier, ack_buffer, MAX_PACKAGE_DATA_LENGTH);
     }
   
     // se leu menos do que o máximo que poderia, terminou de ler o arquivo.
@@ -100,32 +131,19 @@ int send_file(char *file) {
   return SUCCESS;
 }
 
+
 int get_file(char *file) {
   char message_buffer[sizeof(message_t)];
   char ack_buffer[sizeof(message_t)];
-  struct sockaddr_in from;
-  unsigned int length = sizeof(struct sockaddr_in);
   
-  // cria uma mensagem do tipo MSG_TYPE_GET_FILE, para indicar ao servidor que quer baixar o tal arquivo
   message_t message;
+  
+  // envia mensagem pedindo arquivo para o servido
   config_message(&message, MSG_TYPE_GET_FILE, 0, "", file);
+  send_message(socket_identifier, message);
   
-  // "serializa" a struct mensagem para enviar pelo socket
-  memcpy(message_buffer, &message, sizeof(message));
-  
-  // envia a mensagem pro servidor
-  int n = sendto(socket_identifier, message_buffer, sizeof(message_buffer), 0, (const struct sockaddr *) &server_address, sizeof(struct sockaddr_in));
-  if (n < 0) {
-    printf("ERROR sendto");
-    return ERROR;
-  }
-  
-  // espera uma resposta dizendo se está tudo ok (arquivo existe e tals)
-  n = recvfrom(socket_identifier, ack_buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &from, &length);
-  if (n < 0) {
-    printf("ERROR recvfrom");
-    return ERROR;
-  }
+  // espera a resposta de que o servidor recebeu
+  receive_message(socket_identifier, ack_buffer, MAX_PACKAGE_DATA_LENGTH);
   
   // se a resposta não for "ok", é uma mensagem de erro. printa ela e retorna erro
   if (strcmp(ack_buffer, "ok") != 0) {
@@ -143,20 +161,19 @@ int get_file(char *file) {
   int received_all = 0;
   
   // antes de receber os dados do arquivo, envia uma mensagem pra manter dualidade envia/recebe
-  n = sendto(socket_identifier, "só vem", sizeof(message_buffer), 0, (const struct sockaddr *) &server_address, sizeof(struct sockaddr_in));
+  config_message(&message, MSG_TYPE_OK, 0, "", "");
+  send_message(socket_identifier, message);
   
   // enquanto houver coisa para receber
   while (!received_all) {
-    
+  
     // espera receber um pedaço de arquivo
-    n = recvfrom(socket_identifier, ack_buffer, sizeof(message_t), 0, (struct sockaddr *) &from, &length);
-    if (n < 0) {
-      printf("ERROR recvfrom");
-      return ERROR;
-    }
+    receive_message(socket_identifier, ack_buffer, sizeof(message_t));
+    
+    // coloca na variável msg do tipo message_t. Em outras palavras, deserializa a mesnagem recebida
     memcpy(msg, ack_buffer, sizeof(message_t));
     
-    // se chegar uma mesganem de fim de transmissão quer dizer que deve sair do loop
+    // se chegar uma mensagem de fim de transmissão quer dizer que deve sair do loop
     if (msg->type == MSG_END_OF_TRANSMISSION) {
       received_all = TRUE;
       continue;
@@ -167,17 +184,12 @@ int get_file(char *file) {
     memcpy(data_on_right_size, msg->data, msg->size);
     data_on_right_size[msg->size] = '\0';
     
-    printf("RECEBIDO:\nsize: %i\n%.128s\n---------------\n", msg->size, data_on_right_size);
-    
     // escreve no arquivo
     write_to_file(full_path, data_on_right_size);
     
     // envia a mensagem de ok pro servidor
-    int n = sendto(socket_identifier, "ok", sizeof(message_buffer), 0, (const struct sockaddr *) &server_address, sizeof(struct sockaddr_in));
-    if (n < 0) {
-      printf("ERROR sendto");
-      return ERROR;
-    }
+    config_message(&message, MSG_TYPE_OK, 0, "", "");
+    send_message(socket_identifier, message);
   }
   
   free(full_path);
@@ -186,13 +198,16 @@ int get_file(char *file) {
   return SUCCESS;
 }
 
+
 void delete_file(char *file) {
 }
+
 
 void close_session() {
   close(socket_identifier);
   // exit(0);
 }
+
 
 void get_sync_dir(char *user) {
   // cria uma string com o path completo "/home/sync_dir_<USER NAME>"
@@ -206,6 +221,7 @@ void get_sync_dir(char *user) {
   // let it go
   free(path);
 }
+
 
 int main(int argc, char *argv[]) {
   if(argc != CLIENT_PARAMS_NUMBER) {

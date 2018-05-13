@@ -20,11 +20,13 @@
 #define MAX_PACKAGE_DATA_LENGTH 128 // tamanho maximo dos dados de um pacote a ser enviado
 
 // Tipos de mensagem
-#define MSG_TYPE_SEND_FILE 0
-#define MSG_TYPE_GET_FILE 1
-#define MSG_TYPE_SYNC 2
-#define MSG_TYPE_DATA 3
-#define MSG_END_OF_TRANSMISSION 4
+#define MSG_TYPE_LOGIN 0
+#define MSG_TYPE_SEND_FILE 1
+#define MSG_TYPE_GET_FILE 2
+#define MSG_TYPE_SYNC 3
+#define MSG_TYPE_DATA 4
+#define MSG_END_OF_TRANSMISSION 5
+#define MSG_TYPE_OK 6
 
 //--------------------------------------------------------------------------------
 // Structs

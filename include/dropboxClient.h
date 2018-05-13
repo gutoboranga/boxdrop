@@ -10,6 +10,9 @@ int get_file(char *file);
 void delete_file(char *file);
 void close_session ();
 
+int send_message(int socket_id, message_t message);
+int receive_message(int socket_id, char *buffer, int size);
+
 //--------------------------------------------------------------------------------
 // Constants
 //--------------------------------------------------------------------------------
