@@ -27,6 +27,8 @@
 #define MSG_TYPE_DATA 4
 #define MSG_END_OF_TRANSMISSION 5
 #define MSG_TYPE_OK 6
+#define MSG_TYPE_LIST_SERVER 7
+#define MSG_TYPE_LIST_SERVER_RESPONSE 8
 
 //--------------------------------------------------------------------------------
 // Structs

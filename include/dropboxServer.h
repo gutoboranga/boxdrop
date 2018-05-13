@@ -6,6 +6,7 @@
 void sync_server();
 void receive_file(char *file);
 int send_file(char *file);
+int ls(char *buffer);
 
 //--------------------------------------------------------------------------------
 // Messages

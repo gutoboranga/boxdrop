@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <netdb.h>
 #include <stdlib.h>
@@ -76,6 +77,37 @@ int send_file(char *file) {
     printf("ERROR sendto");
     return ERROR;
   }
+  
+  return SUCCESS;
+}
+
+int ls(char *buffer) {
+  DIR *dir;
+  dir = opendir(user_dir_path);
+  
+  if (dir == NULL) {
+    return ERROR;
+  }
+  
+  struct dirent *ent;
+  int buffer_index = 0;
+  
+  strcpy(buffer, "");
+  
+  while ((ent = readdir(dir)) != NULL) {
+    // salva no buffer todas as entradas exceto . e ..
+    if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
+      strcpy(buffer + buffer_index, "  ");
+      buffer_index += 2;
+      
+      strcpy(buffer + buffer_index, ent->d_name);
+      buffer_index += strlen(ent->d_name);
+  
+      memcpy(buffer + buffer_index, "\n", 1);
+      buffer_index += 1;
+    }
+  }
+  closedir (dir);
   
   return SUCCESS;
 }
@@ -192,6 +224,27 @@ int main(int argc, char *argv[]) {
       }
       
       free(filepath);
+    }
+    
+    else if (msg->type == MSG_TYPE_LIST_SERVER) {
+      // chama ls (funçao implementada mais pra cima)
+      char *buffer = malloc(sizeof(char) * MAX_PACKAGE_DATA_LENGTH);
+      ls(buffer);
+      
+      // envia o resultado de volta para o cliente
+      message_t message;
+      config_message(&message, MSG_TYPE_LIST_SERVER_RESPONSE, sizeof(buffer), buffer, "");
+      
+      char message_buffer[sizeof(message_t)];
+      memcpy(message_buffer, &message, sizeof(message));
+      
+      int n = sendto(sockfd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
+      if (n < 0) {
+        printf("ERROR sendto");
+        return ERROR;
+      }
+      
+      free(buffer);
     }
     
     // senão...

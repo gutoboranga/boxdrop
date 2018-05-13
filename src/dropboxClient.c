@@ -201,6 +201,31 @@ void delete_file(char *file) {
 }
 
 
+void list_server() {
+  // manda mensagem pedindo lista de arquivos
+  message_t message;
+  config_message(&message, MSG_TYPE_LIST_SERVER, 0, "", "");
+  send_message(socket_identifier, message);
+  
+  // espera resposta
+  char buffer[MAX_PACKAGE_DATA_LENGTH];
+  struct sockaddr_in from;
+  unsigned int length = sizeof(struct sockaddr_in);
+  
+  // receive_message(socket_identifier, response_buffer, sizeof(message_t));
+  int n = recvfrom(socket_identifier, buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &from, &length);
+  if (n < 0) {
+    printf("ERROR recvfrom\n");
+  }
+  
+  // deserializa a mensagem recebida
+  message_t *msg = malloc(sizeof(message_t));
+  memcpy(msg, buffer, sizeof(message_t));
+  
+  printf("%s", msg->data);
+}
+
+
 void close_session() {
   close(socket_identifier);
   // exit(0);
@@ -289,6 +314,7 @@ int main(int argc, char *argv[]) {
      }
      
      else if (strcmp(command, CLIENT_LIST_SERVER_CMD) == 0) {
+       list_server();
      }
      
      else if (strcmp(command, CLIENT_LIST_CLIENT_CMD) == 0) {
