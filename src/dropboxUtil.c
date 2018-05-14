@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <time.h>
 #include <dirent.h>
 
 void read_command(char *command, char *argument, int size) {
@@ -115,7 +116,22 @@ int ls(char *dirpath, char *buffer) {
       
       strcpy(buffer + buffer_index, ent->d_name);
       buffer_index += strlen(ent->d_name);
-  
+
+      struct tm *t;
+      struct stat attrib;
+
+      char full_path[PATH_MAX_SIZE];
+      strcpy(full_path, dirpath);
+      strcat(full_path, "/");
+      strcat(full_path, ent->d_name);
+
+      stat(full_path, &attrib);
+      t = localtime(&(attrib.st_mtime));
+      char mod_time[32];
+      sprintf(mod_time, "\t%d/%d/%d_%d:%d:%d", t->tm_mday, t->tm_mon + 1, t->tm_year + 1900, t->tm_hour, t->tm_min, t->tm_sec);
+      strcpy(buffer + buffer_index, mod_time);
+      buffer_index += strlen(mod_time);
+
       memcpy(buffer + buffer_index, "\n", 1);
       buffer_index += 1;
     }

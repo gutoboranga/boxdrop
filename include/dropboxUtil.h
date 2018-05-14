@@ -15,7 +15,7 @@
 #define FALSE 0
 #define TRUE 1
 
-#define BASE_DIR_PATH "/home/sync_dir_"
+#define BASE_DIR_PATH "sync_dir_"
 
 #define MAX_PACKAGE_DATA_LENGTH 128 // tamanho maximo dos dados de um pacote a ser enviado
 
