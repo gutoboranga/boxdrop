@@ -12,6 +12,7 @@ void close_session ();
 
 int send_message(int socket_id, message_t message);
 int receive_message(int socket_id, char *buffer, int size);
+int receive_file(char *file);
 
 //--------------------------------------------------------------------------------
 // Constants
@@ -30,7 +31,8 @@ int receive_message(int socket_id, char *buffer, int size);
 #define CLIENT_LIST_CLIENT_CMD "list_client"
 #define CLIENT_GET_SYNC_DYR_CMD "get_sync_dir"
 #define CLIENT_EXIT_CMD "exit"
-#define CLIENT_SEND_ALL_CMD "send_all"
+#define CLIENT_SEND_ALL_CMD "sync_set"
+#define CLIENT_GET_ALL_CMD "sync_get"
 
 //--------------------------------------------------------------------------------
 // Messages
@@ -52,5 +54,7 @@ int receive_message(int socket_id, char *buffer, int size);
 #define CLIENT_UPLOAD_NO_SUCH_FILE "  [ERRO] O arquivo %s não foi encontrado.\n"
 
 #define CLIENT_UPLOAD_ALL_SUCCESS "  Arquivos enviados com sucesso!\n"
+#define CLIENT_GET_ALL_SUCCESS "  Arquivos recebidos com sucesso!\n"
+#define CLIENT_GET_ALL_ERROR "  [ERRO] Não foi possível obter todos os arquivos do servidor.\n"
 
 #endif

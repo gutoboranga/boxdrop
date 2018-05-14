@@ -124,3 +124,34 @@ int ls(char *dirpath, char *buffer) {
   
   return SUCCESS;
 }
+
+int delete_all(char *dirpath) {
+  DIR *dir;
+  int success = 0;
+  struct dirent *ent;
+  
+  dir = opendir(dirpath);
+  
+  if (dir == NULL) {
+    return ERROR;
+  }
+  
+  // aí sim itera sobre os arquivos
+  while ((ent = readdir(dir)) != NULL) {
+    // para todas as entradas exceto . e ..
+    if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
+      char filepath[PATH_MAX_SIZE];
+      strcpy(filepath, dirpath);
+      strcat(filepath, "/");
+      strcat(filepath, ent->d_name);
+      
+      if (remove(filepath) != SUCCESS) {
+        success = -1;
+      }
+    }
+  }
+  closedir (dir);
+  
+  return success;
+}
+

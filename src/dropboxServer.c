@@ -82,6 +82,58 @@ int send_file(char *file) {
 }
 
 
+int send_all() {
+  DIR *dir;
+  int success = 0;
+  struct dirent *ent;
+  
+  char *dirpath;
+  dirpath = user_dir_path;
+  
+  dir = opendir(dirpath);
+  
+  if (dir == NULL) {
+    return ERROR;
+  }
+  
+  int n;
+  message_t message;
+  char message_buffer[sizeof(message_t)];
+  
+  // itera sobre os arquivos
+  while ((ent = readdir(dir)) != NULL) {
+    // para todas as entradas exceto . e ..
+    if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
+      char filepath[PATH_MAX_SIZE];
+      strcpy(filepath, dirpath);
+      strcat(filepath, ent->d_name);
+      
+      printf("FILE: %s\n", ent->d_name);
+      
+      // envia o nome do arquivo de volta para o cliente
+      config_message(&message, MSG_TYPE_DATA, MAX_PACKAGE_DATA_LENGTH, ent->d_name, ent->d_name);
+      memcpy(message_buffer, &message, sizeof(message));
+      
+      n = sendto(socket_fd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &client_address, sizeof(struct sockaddr));
+      if (n < 0)
+  			printf("ERROR on sendto");
+        
+  		n = recvfrom(socket_fd, message_buffer, sizeof(message_t), 0, (struct sockaddr *) &client_address, &client_length);
+  		if (n < 0)
+  			printf("ERROR on recvfrom");
+      
+      // if (send_file(filepath) != SUCCESS) {
+      //   success = -1;
+      // }
+    }
+  }
+  closedir (dir);
+  
+  return success;
+}
+
+
+
 int main(int argc, char *argv[]) {
 	int sockfd, n;
 	socklen_t clilen;
@@ -227,6 +279,82 @@ int main(int argc, char *argv[]) {
       
       free(buffer);
     }
+    
+    else if (msg->type == MSG_TYPE_DELETE_ALL) {
+      // vai deletar tudo
+      printf("Will clean.\n");
+      
+      delete_all(user_dir_path);
+      
+      // envia o resultado de volta para o cliente
+      int n = sendto(sockfd, "ok", 12, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
+      if (n < 0) {
+        printf("ERROR sendto");
+        return ERROR;
+      }
+    }
+    
+    else if (msg->type == MSG_TYPE_GET_ALL) {
+      // envia o resultado dizendo que ok
+      int n = sendto(sockfd, "ok", 12, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
+      if (n < 0) {
+        printf("ERROR sendto");
+        return ERROR;
+      }
+      
+      // espera o client dizer que está preparado
+  		n = recvfrom(sockfd, message_buffer, sizeof(message_t), 0, (struct sockaddr *) &cli_addr, &clilen);
+  		if (n < 0)
+  			printf("ERROR on recvfrom");
+      
+      // send_all();
+      DIR *dir;
+      int success = 0;
+      struct dirent *ent;
+      
+      char *dirpath;
+      dirpath = user_dir_path;
+      
+      dir = opendir(dirpath);
+      
+      if (dir == NULL) {
+        return ERROR;
+      }
+      
+      int j;
+      message_t message;
+      char message_buffer[sizeof(message_t)];
+      
+      // itera sobre os arquivos
+      while ((ent = readdir(dir)) != NULL) {
+        // para todas as entradas exceto . e ..
+        if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
+          char filepath[PATH_MAX_SIZE];
+          strcpy(filepath, dirpath);
+          strcat(filepath, ent->d_name);
+          
+          // envia o nome do arquivo de volta para o cliente
+          config_message(&message, MSG_TYPE_DATA, MAX_PACKAGE_DATA_LENGTH, ent->d_name, ent->d_name);
+          memcpy(message_buffer, &message, sizeof(message));
+          
+          j = sendto(sockfd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
+          if (j < 0)
+      			printf("ERROR on sendto");
+            
+          send_file(filepath);
+        }
+      }
+      closedir (dir);
+      
+      // avisa que acabaram os arquivos
+      config_message(&message, MSG_END_OF_TRANSMISSION, MAX_PACKAGE_DATA_LENGTH, "", "");
+      memcpy(message_buffer, &message, sizeof(message));
+      
+      j = sendto(sockfd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
+      if (j < 0)
+        printf("ERROR on sendto");
+    }
+    
     
     // senão...
     else {

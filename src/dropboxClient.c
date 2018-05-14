@@ -151,18 +151,25 @@ int get_file(char *file) {
     return ERROR;
   }
   
+  // antes de receber os dados do arquivo, envia uma mensagem pra manter dualidade envia/recebe
+  config_message(&message, MSG_TYPE_OK, 0, "", "");
+  send_message(socket_identifier, message);
+  
+  return receive_file(file);
+}
+
+int receive_file(char *file) {
+  char message_buffer[sizeof(message_t)];
+  char ack_buffer[sizeof(message_t)];
+  message_t *msg = malloc(sizeof(message_t));
+  message_t message;
+  int received_all = 0;
+  
   // cria uma string c o path absoluto do arquivo de destino
   char *full_path = malloc(sizeof(char) * PATH_MAX_SIZE);
   full_path = build_user_dir_path(username);
   strcat(full_path, "/");
   strcat(full_path, file);
-  
-  message_t *msg = malloc(sizeof(message_t));
-  int received_all = 0;
-  
-  // antes de receber os dados do arquivo, envia uma mensagem pra manter dualidade envia/recebe
-  config_message(&message, MSG_TYPE_OK, 0, "", "");
-  send_message(socket_identifier, message);
   
   // enquanto houver coisa para receber
   while (!received_all) {
@@ -271,6 +278,17 @@ int send_all() {
     return ERROR;
   }
   
+  // manda uma mensagem para o servidor, dizendo que apague tudo que tem lá
+  // para receber os arquivos que tem aqui
+  message_t message;
+  config_message(&message, MSG_TYPE_DELETE_ALL, 0, "", "");
+  send_message(socket_identifier, message);
+  
+  // espera a resposta (ack)
+  char ack_buffer[MAX_PACKAGE_DATA_LENGTH];
+  receive_message(socket_identifier, ack_buffer, MAX_PACKAGE_DATA_LENGTH);
+  
+  // aí sim itera sobre os arquivos
   while ((ent = readdir(dir)) != NULL) {
     // para todas as entradas exceto . e ..
     if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
@@ -286,6 +304,64 @@ int send_all() {
   closedir (dir);
   
   return success;
+}
+
+// salva em sync_dir_<USERNAME> todos os arquivos contidos no servidor
+int get_all() {
+  message_t message;
+  
+  // manda uma mensagem para o servidor
+  config_message(&message, MSG_TYPE_GET_ALL, 0, "", "");
+  send_message(socket_identifier, message);
+  
+  // espera a resposta (ack)
+  char ack_buffer[MAX_PACKAGE_DATA_LENGTH];
+  receive_message(socket_identifier, ack_buffer, MAX_PACKAGE_DATA_LENGTH);
+  
+  if (strcmp(ack_buffer, "ok") != 0) {
+    printf(CLIENT_GET_ALL_ERROR);
+    return ERROR;
+  }
+  
+  // apaga tudo que estiver no client
+  delete_all(build_user_dir_path(username));
+  
+  // envia uma mensagem pra avisar que está preparado
+  config_message(&message, MSG_TYPE_OK, 0, "", "");
+  send_message(socket_identifier, message);
+  
+  message_t *msg = malloc(sizeof(message_t));
+  char message_buffer[sizeof(message_t)];
+  char response_buffer[sizeof(message_t)];
+  int received_all_files = FALSE;
+  
+  while (!received_all_files) {
+    // espera receber uma mensagem arquivo
+    receive_message(socket_identifier, response_buffer, sizeof(message_t));
+  
+    // deserializa a mesnagem recebida
+    memcpy(msg, response_buffer, sizeof(message_t));
+  
+    // se chegar uma mensagem de fim de transmissão quer dizer que deve sair do loop
+    if (msg->type == MSG_END_OF_TRANSMISSION) {
+      received_all_files = TRUE;
+      continue;
+    }
+  
+    // senão, deve ser mensagem de dados.
+    // neste caso é um nome do arquivo que o servidor vai enviar em breve
+    //
+    // avisa que recebeu o nome do arquivo
+    config_message(&message, MSG_TYPE_OK, 0, "", "");
+    send_message(socket_identifier, message);
+    
+    // recebe arquivo
+    if (receive_file(msg->data) != 0) {
+      printf("  Erro ao receber arquivo %s.\n", msg->data);
+    }
+  }
+  
+  return SUCCESS;
 }
 
 
@@ -384,6 +460,13 @@ int main(int argc, char *argv[]) {
      else if (strcmp(command, CLIENT_SEND_ALL_CMD) == 0) {
        if (send_all() == SUCCESS) {
          printf(CLIENT_UPLOAD_ALL_SUCCESS);
+       }
+     }
+     
+     // comando criado para trazer tudo do server para o client
+     else if (strcmp(command, CLIENT_GET_ALL_CMD) == 0) {
+       if (get_all() == SUCCESS) {
+         printf(CLIENT_GET_ALL_SUCCESS);
        }
      }
      

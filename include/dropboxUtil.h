@@ -29,6 +29,8 @@
 #define MSG_TYPE_OK 6
 #define MSG_TYPE_LIST_SERVER 7
 #define MSG_TYPE_LIST_SERVER_RESPONSE 8
+#define MSG_TYPE_DELETE_ALL 9
+#define MSG_TYPE_GET_ALL 10
 
 //--------------------------------------------------------------------------------
 // Structs
@@ -70,5 +72,6 @@ int write_to_file(char *filename, char *content);
 int file_exists(char *file);
 void config_message(message_t *message, int type, int size, char *data, char *filename);
 int ls(char *dirpath, char *buffer);
+int delete_all(char *dirpath);
 
 #endif
