@@ -17,7 +17,7 @@
 
 #define BASE_DIR_PATH "sync_dir_"
 
-#define MAX_PACKAGE_DATA_LENGTH 128 // tamanho maximo dos dados de um pacote a ser enviado
+#define MAX_PACKAGE_DATA_LENGTH 1250 // tamanho maximo dos dados de um pacote a ser enviado
 
 // Tipos de mensagem
 #define MSG_TYPE_LOGIN 0
