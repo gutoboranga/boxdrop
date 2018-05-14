@@ -30,6 +30,7 @@ int receive_message(int socket_id, char *buffer, int size);
 #define CLIENT_LIST_CLIENT_CMD "list_client"
 #define CLIENT_GET_SYNC_DYR_CMD "get_sync_dir"
 #define CLIENT_EXIT_CMD "exit"
+#define CLIENT_SEND_ALL_CMD "send_all"
 
 //--------------------------------------------------------------------------------
 // Messages
@@ -49,5 +50,7 @@ int receive_message(int socket_id, char *buffer, int size);
 #define CLIENT_DOWNLOAD_SUCCESS "  Arquivo %s baixado com sucesso!\n"
 
 #define CLIENT_UPLOAD_NO_SUCH_FILE "  [ERRO] O arquivo %s não foi encontrado.\n"
+
+#define CLIENT_UPLOAD_ALL_SUCCESS "  Arquivos enviados com sucesso!\n"
 
 #endif

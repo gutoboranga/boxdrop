@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include <dirent.h>
 
 char *username;
 char *adress;
@@ -227,7 +228,7 @@ void list_server() {
 }
 
 void list_client() {
-  char *buffer = malloc(sizeof(char) * MAX_PACKAGE_DATA_LENGTH);
+  char *buffer = malloc(sizeof(char) * MAX_PACKAGE_DATA_LENGTH * 10);
   ls(build_user_dir_path(username), buffer);
   
   printf("%s", buffer);
@@ -252,6 +253,39 @@ void get_sync_dir(char *user) {
   
   // let it go
   free(path);
+}
+
+// envia todos os arquivos contidos em sync_dir_<USERNAME> para o servidor
+// e os salva no diretório correspondente
+int send_all() {
+  DIR *dir;
+  int success = 0;
+  struct dirent *ent;
+  
+  char *dirpath;
+  dirpath = strcat(build_user_dir_path(username), "/");
+  
+  dir = opendir(dirpath);
+  
+  if (dir == NULL) {
+    return ERROR;
+  }
+  
+  while ((ent = readdir(dir)) != NULL) {
+    // para todas as entradas exceto . e ..
+    if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
+      char filepath[PATH_MAX_SIZE];
+      strcpy(filepath, dirpath);
+      strcat(filepath, ent->d_name);
+      
+      if (send_file(filepath) != SUCCESS) {
+        success = -1;
+      }
+    }
+  }
+  closedir (dir);
+  
+  return success;
 }
 
 
@@ -320,8 +354,6 @@ int main(int argc, char *argv[]) {
        if (send_file(argument) == SUCCESS) {
          printf(CLIENT_UPLOAD_SUCCESS, argument);
        }
-       
-       // aqui sim faz o que deve ser feito
      }
      
      else if (strcmp(command, CLIENT_DOWNLOAD_CMD) == 0) {
@@ -334,7 +366,6 @@ int main(int argc, char *argv[]) {
        if (get_file(argument) == SUCCESS) {
          printf(CLIENT_DOWNLOAD_SUCCESS, argument);
        }
-       // aqui sim faz o que deve ser feito
      }
      
      else if (strcmp(command, CLIENT_LIST_SERVER_CMD) == 0) {
@@ -347,6 +378,13 @@ int main(int argc, char *argv[]) {
      
      else if (strcmp(command, CLIENT_GET_SYNC_DYR_CMD) == 0) {
        get_sync_dir(username);
+     }
+     
+     // comando criado para enviar tudo do client para o server
+     else if (strcmp(command, CLIENT_SEND_ALL_CMD) == 0) {
+       if (send_all() == SUCCESS) {
+         printf(CLIENT_UPLOAD_ALL_SUCCESS);
+       }
      }
      
      else {
