@@ -8,35 +8,35 @@
 
 void read_command(char *command, char *argument, int size) {
   fgets(command, size, stdin);
-  
+
   int last_index = strlen(command) - 1;
-  
+
   // remove \n se foi colocado no final pelo fgets
   if (command[last_index] == '\n') {
     command[last_index] = 0;
   }
-  
+
   // salva em command a primeira palavra da string, separada por espaços
   strtok(command, " ");
-  
+
   // salva em aux um ponteiro pra segunda parte do comando (argumento)
   char *aux = strtok(NULL, " ");
   if (aux == NULL) {
     // se não há argumento, bota "" em aux (argument não pode receber NULL)
     aux = "";
   }
-  
+
   // copia de aux pra argument
   strcpy(argument, aux);
 }
 
 char *build_user_dir_path(char *user) {
   char *path;
-  
+
   path = malloc(sizeof(char) * PATH_MAX_SIZE);
   strcpy(path, BASE_DIR_PATH);
   strcat(path, user);
-  
+
   return path;
 }
 
@@ -46,44 +46,44 @@ int dir_exists(char *path) {
   if (stat(path, &st) == -1) {
       return FALSE;
   }
-  
+
   return TRUE;
 }
 
 int read_file_content(char *filename, char *buffer, int start_index, int size) {
   FILE *file = fopen(filename, "r");
-  
+
   if (!file) {
     return ERROR;
   }
-  
+
   fseek(file, start_index, SEEK_SET);
   int amount_read = fread(buffer, 1, size, file);
   fclose(file);
-  
+
   return amount_read;
 }
 
 int write_to_file(char *filename, char *content) {
   FILE *file = fopen(filename, "a+");
-  
+
   if (!file) {
     return ERROR;
   }
-  
+
   fprintf(file, "%s", content);
   fclose(file);
-  
+
   return SUCCESS;
 }
 
 int file_exists(char *filename) {
   FILE *file = fopen(filename, "r");
-  
+
   if (!file) {
     return FALSE;
   }
-  
+
   fclose(file);
   return TRUE;
 }
@@ -98,22 +98,22 @@ void config_message(message_t *message, int type, int size, char *data, char *fi
 int ls(char *dirpath, char *buffer) {
   DIR *dir;
   dir = opendir(dirpath);
-  
+
   if (dir == NULL) {
     return ERROR;
   }
-  
+
   struct dirent *ent;
   int buffer_index = 0;
-  
+
   strcpy(buffer, "");
-  
+
   while ((ent = readdir(dir)) != NULL) {
     // salva no buffer todas as entradas exceto . e ..
     if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
       strcpy(buffer + buffer_index, "  ");
       buffer_index += 2;
-      
+
       strcpy(buffer + buffer_index, ent->d_name);
       buffer_index += strlen(ent->d_name);
 
@@ -128,7 +128,7 @@ int ls(char *dirpath, char *buffer) {
       stat(full_path, &attrib);
       t = localtime(&(attrib.st_mtime));
       char mod_time[32];
-      sprintf(mod_time, "\t%d/%d/%d_%d:%d:%d", t->tm_mday, t->tm_mon + 1, t->tm_year + 1900, t->tm_hour, t->tm_min, t->tm_sec);
+      sprintf(mod_time, "\t - %d/%d/%d_%d:%d:%d", t->tm_mday, t->tm_mon + 1, t->tm_year + 1900, t->tm_hour, t->tm_min, t->tm_sec);
       strcpy(buffer + buffer_index, mod_time);
       buffer_index += strlen(mod_time);
 
@@ -137,7 +137,7 @@ int ls(char *dirpath, char *buffer) {
     }
   }
   closedir (dir);
-  
+
   return SUCCESS;
 }
 
@@ -145,13 +145,13 @@ int delete_all(char *dirpath) {
   DIR *dir;
   int success = 0;
   struct dirent *ent;
-  
+
   dir = opendir(dirpath);
-  
+
   if (dir == NULL) {
     return ERROR;
   }
-  
+
   // aí sim itera sobre os arquivos
   while ((ent = readdir(dir)) != NULL) {
     // para todas as entradas exceto . e ..
@@ -160,14 +160,13 @@ int delete_all(char *dirpath) {
       strcpy(filepath, dirpath);
       strcat(filepath, "/");
       strcat(filepath, ent->d_name);
-      
+
       if (remove(filepath) != SUCCESS) {
         success = -1;
       }
     }
   }
   closedir (dir);
-  
+
   return success;
 }
-
