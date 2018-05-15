@@ -8,7 +8,7 @@ void sync_client();
 int send_file(char *file);
 int get_file(char *file);
 void delete_file(char *file);
-void close_session ();
+int close_session ();
 
 int send_message(int socket_id, message_t message);
 int receive_message(int socket_id, char *buffer, int size);
@@ -46,6 +46,8 @@ int receive_file(char *file);
 
 #define CLIENT_UPLOAD_CMD_MISSING_ARGUMENT "\n[ERRO] O comando upload deve receber um parâmetro:\n\n\t> upload <path/filename.ext>\n\n"
 #define CLIENT_DOWNLOAD_CMD_MISSING_ARGUMENT "\n[ERRO] O comando download deve receber um parâmetro:\n\n\t> download <filename.ext>\n\n"
+
+#define CLIENT_LOGOUT_SUCCESS "  Você foi deslogado!\n"
 
 #define CLIENT_UPLOAD_SUCCESS "  Arquivo %s enviado com sucesso!\n"
 

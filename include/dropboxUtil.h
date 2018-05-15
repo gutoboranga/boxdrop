@@ -31,6 +31,7 @@
 #define MSG_TYPE_LIST_SERVER_RESPONSE 8
 #define MSG_TYPE_DELETE_ALL 9
 #define MSG_TYPE_GET_ALL 10
+#define MSG_TYPE_LOGOUT 11
 
 //--------------------------------------------------------------------------------
 // Structs

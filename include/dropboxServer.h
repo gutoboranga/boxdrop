@@ -12,6 +12,7 @@ int send_file(char *file);
 //--------------------------------------------------------------------------------
 
 #define SERVER_FILE_NOT_FOUND "  [ERRO] O arquivo requisitado não foi encontrado no servidor.\n"
+#define MAX_CONNECTIONS 2
 
 
 #endif
