@@ -44,9 +44,10 @@ void connect_to_primary(char *ip) {
   primary->port = internal_port;
   primary->socket_id = create_socket(primary->ip, internal_port, &(primary->address));
   
+  printf("PORTA %d\n", internal_port);
+  
   // adiciona o primário na lista dos outros processos
   other_processes = list_make_node(primary);
-  
   
   // serializa a struct process_t do self
   char self_data_buffer[MAX_PACKAGE_DATA_LENGTH];
@@ -59,13 +60,9 @@ void connect_to_primary(char *ip) {
   
   char buffer[MAX_PACKAGE_DATA_LENGTH];
   
-  printf("vai aguardar resposta...\n");
-  
-  // aguarda resposta do primário contendo os dados dos outros processos de backup (se houver)
+  // aguarda resposta do primário dizendo OK
   receive_message2(primary->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH);
   
-  // printf("Recebi umas parada\n");
-  //
   message_t *msg = malloc(sizeof(message_t));
   memcpy(msg, buffer, sizeof(message_t));
   
@@ -74,16 +71,16 @@ void connect_to_primary(char *ip) {
     printf("ERRO AO CONECTAR COM PRIMÁRIO!\n");
     exit(-1);
   }
+  free(msg);
   
-  printf("Conectou direitinho\n");
-  
-  receive_other_processes_data_from_primary(primary);
+  printf("> Conexão com processo primário feita com sucessso!\n");
 }
 
-void receive_other_processes_data_from_primary(process_t *primary) {
+void get_other_processes_data() {
   int there_are_processes_remaining = TRUE;
   char buffer[MAX_PACKAGE_DATA_LENGTH];
   message_t *msg = malloc(sizeof(message_t));
+  process_t *primary = (process_t *) other_processes->value;
   
   // agora este processo receberá do primário os dados dos outros processos
   while(there_are_processes_remaining) {
@@ -139,10 +136,6 @@ void receive_other_processes_data_from_primary(process_t *primary) {
 //   }
 // }
 
-void get_other_processes_data() {
-  
-}
-
 void connect_to_others(char **argv) {
   // percorre a lista de outros processos
   
@@ -193,7 +186,7 @@ void *listen_to_other_processes() {
   message_t *msg = malloc(sizeof(message_t));
   char message_buffer[sizeof(message_t)];
     
-  printf("Aguardando novos processos conectarem ...\n");
+  printf("> Aguardando novos processos conectarem ...\n");
     
   while(1) {
     // receive message from other processes
@@ -205,7 +198,6 @@ void *listen_to_other_processes() {
     
     // se recebeu uma mensagem de um servidor backup querendo conectar
     if (msg->type == _MSG_TYPE_CONNECT_PLEASE) {
-      printf("> Alguém quer se conectar...\n");
       
       // de-serializa dados do novo processo, que vieram junto na mensagem
       process_t *new_backup = malloc(sizeof(process_t));
@@ -221,6 +213,8 @@ void *listen_to_other_processes() {
       message_t message;
       config_message(&message, _MSG_TYPE_CONNECTED, 0, "", "");
       send_message2(sockfd, message, &(new_backup->address));
+      
+      printf("> Conexão com processo backup feita com sucesso!\nPid: %d\n\n", new_backup->pid);
     }
     
     // se recebeu uma mensagem pedindo dados de um processo
@@ -233,7 +227,7 @@ void *listen_to_other_processes() {
       process_t *p;
       list_t *aux = other_processes;
       
-      printf("> Alguém pediu dados\n");
+      // printf("> Alguém pediu dados\n");
       
       while(aux != NULL) {
         // para cada processo existente na lista de processos, envia os dados dele para o novo processo
@@ -257,7 +251,7 @@ void *listen_to_other_processes() {
         config_message(&message, _MSG_TYPE_PROCESS_DATA, 0, buffer, "");
         send_message2(sockfd, message, &cli_addr);
         
-        printf("> Enviei um processo com pid %d\n", p->pid);
+        // printf("> Enviei um processo com pid %d\n", p->pid);
         
         // espera o processo pedir mais um
         n = recvfrom(sockfd, message_buffer, sizeof(message_t), 0, (struct sockaddr *) &cli_addr, &clilen);
@@ -294,6 +288,9 @@ int main(int argc, char **argv) {
       printf(MISSING_PARAMETER_FOR_BACKUP_PROCESS);
       exit(1);
     }
+    internal_port = atoi(argv[3]);
+    // printf("internal port: %d\n", internal_port);
+    
     // se foi, conecta com ele
     connect_to_primary(argv[2]);
     
@@ -303,8 +300,6 @@ int main(int argc, char **argv) {
     // conecta aos outros processos backup
     connect_to_others(argv);
     
-    internal_port = atoi(argv[3]);
-    printf("internal port: %d\n", internal_port);
     // cria uma thread pra ficar testando se o primário ainda está vivo
     // pthread_t tid_healthcheck;
     // pthread_create(&tid_healthcheck, NULL, primary_healthcheck, NULL);
