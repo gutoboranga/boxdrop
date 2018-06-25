@@ -180,10 +180,15 @@ int create_socket(char *host, int port, struct sockaddr_in *server_address) {
   struct hostent *server;
   // struct sockaddr_in s_address;
   
+  printf("will gethostbyname %s\n", host);
+  
 	server = gethostbyname(host);
+  printf("server ERROR\n");
 	if (server == NULL) {
+    printf("server ERROR\n");
     return ERROR;
   }
+  printf("server ok\n");
 
   // cria o socket
   int socket_id = socket(AF_INET, SOCK_DGRAM, 0);
@@ -222,4 +227,11 @@ int receive_message2(int socket_id, char *buffer, int size) {
   }
 
   return SUCCESS;
+}
+
+void config_message2(message_t *message, int type, int size, char *data, char *filename) {
+  message->type = type;
+  message->size = size;
+  memcpy(message->data, data, MAX_PACKAGE_DATA_LENGTH);
+  memcpy(message->filename, filename, MAXNAME);
 }

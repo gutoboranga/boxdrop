@@ -47,6 +47,7 @@
 #define _MSG_TYPE_PLEASE_GIVE_ME_PROCESSESS_DATA 102
 #define _MSG_TYPE_PROCESS_DATA 103
 #define _MSG_TYPE_END_OF_PROCESS_DATA 104
+#define _MSG_TYPE_BACKUP_TO_BACKUP_CONNECT_PLEASE 105
 
 //--------------------------------------------------------------------------------
 // Structs
@@ -92,5 +93,6 @@ int delete_all(char *dirpath);
 int create_socket(char *host, int port, struct sockaddr_in *server_address);
 int send_message2(int socket_id, message_t message, struct sockaddr_in *server_address);
 int receive_message2(int socket_id, char *buffer, int size);
+void config_message2(message_t *message, int type, int size, char *data, char *filename);
 
 #endif
