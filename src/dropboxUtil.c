@@ -5,6 +5,11 @@
 #include <stdio.h>
 #include <time.h>
 #include <dirent.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <netdb.h>
 
 void read_command(char *command, char *argument, int size) {
   fgets(command, size, stdin);
@@ -169,4 +174,52 @@ int delete_all(char *dirpath) {
   closedir (dir);
 
   return success;
+}
+
+int create_socket(char *host, int port, struct sockaddr_in *server_address) {
+  struct hostent *server;
+  // struct sockaddr_in s_address;
+  
+	server = gethostbyname(host);
+	if (server == NULL) {
+    return ERROR;
+  }
+
+  // cria o socket
+  int socket_id = socket(AF_INET, SOCK_DGRAM, 0);
+  
+  // seta umas paradas do servidor
+  server_address->sin_family = AF_INET;
+	server_address->sin_port = htons(port);
+	server_address->sin_addr = *((struct in_addr *)server->h_addr);
+	bzero(&(server_address->sin_zero), 8);
+
+  return socket_id;
+}
+
+int send_message2(int socket_id, message_t message, struct sockaddr_in *server_address) {
+  char message_buffer[sizeof(message_t)];
+
+  // "serializa" a struct mensagem (como um buffer) para enviar pelo socket
+  memcpy(message_buffer, &message, sizeof(message));
+
+  int n = sendto(socket_id, message_buffer, sizeof(message_buffer), 0, (const struct sockaddr *) server_address, sizeof(struct sockaddr_in));
+  if (n < 0) {
+    printf("ERROR sendto\n");
+    return ERROR;
+  }
+  return SUCCESS;
+}
+
+int receive_message2(int socket_id, char *buffer, int size) {
+  struct sockaddr_in from;
+  unsigned int length = sizeof(struct sockaddr_in);
+
+  int n = recvfrom(socket_id, buffer, size, 0, (struct sockaddr *) &from, &length);
+  if (n < 0) {
+    printf("ERROR recvfrom\n");
+    return ERROR;
+  }
+
+  return SUCCESS;
 }

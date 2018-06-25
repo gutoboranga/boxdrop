@@ -1,6 +1,13 @@
 #ifndef __dropboxUtil__
 #define __dropboxUtil__
 
+#include <stdlib.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <netdb.h>
+
 //--------------------------------------------------------------------------------
 // Constants
 //--------------------------------------------------------------------------------
@@ -32,6 +39,14 @@
 #define MSG_TYPE_DELETE_ALL 9
 #define MSG_TYPE_GET_ALL 10
 #define MSG_TYPE_LOGOUT 11
+
+// Mensagens internas, entre os processos servidores
+
+#define _MSG_TYPE_CONNECT_PLEASE 100
+#define _MSG_TYPE_CONNECTED 101
+#define _MSG_TYPE_PLEASE_GIVE_ME_PROCESSESS_DATA 102
+#define _MSG_TYPE_PROCESS_DATA 103
+#define _MSG_TYPE_END_OF_PROCESS_DATA 104
 
 //--------------------------------------------------------------------------------
 // Structs
@@ -74,5 +89,8 @@ int file_exists(char *file);
 void config_message(message_t *message, int type, int size, char *data, char *filename);
 int ls(char *dirpath, char *buffer);
 int delete_all(char *dirpath);
+int create_socket(char *host, int port, struct sockaddr_in *server_address);
+int send_message2(int socket_id, message_t message, struct sockaddr_in *server_address);
+int receive_message2(int socket_id, char *buffer, int size);
 
 #endif
