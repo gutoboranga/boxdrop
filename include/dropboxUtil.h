@@ -48,6 +48,7 @@
 #define _MSG_TYPE_PROCESS_DATA 103
 #define _MSG_TYPE_END_OF_PROCESS_DATA 104
 #define _MSG_TYPE_BACKUP_TO_BACKUP_CONNECT_PLEASE 105
+#define _MSG_TYPE_ARE_YOU_OK 106
 
 //--------------------------------------------------------------------------------
 // Structs

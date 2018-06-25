@@ -242,7 +242,6 @@ void *listen_to_other_processes() {
   message_t *msg = malloc(sizeof(message_t));
   char message_buffer[sizeof(message_t)];
     
-  // printf("> Aguardando novos processos conectarem ...\n");
     
   while(1) {
     // receive message from other processes
@@ -325,16 +324,40 @@ void *listen_to_other_processes() {
       config_message(&message, _MSG_TYPE_CONNECTED, 0, "", "");
       send_message2(sockfd, message, &(new_backup->address));
     }
+    
+    // se for uma mensagem de healthcheck
+    else if (msg->type == _MSG_TYPE_ARE_YOU_OK) {
+      printf("> I'm fine, thanks!\n");
+      
+      // responde dizendo OK
+      message_t message;
+      config_message(&message, MSG_TYPE_OK, 0, "", "");
+      send_message2(sockfd, message, &cli_addr);
+    }
   }
 }
 
-// void do_something() {
-//   while(1) {
-//     // 1/2 segundo
-//     usleep(500000);
-//     printf("did something\n");
-//   }
-// }
+void *primary_healthcheck() {
+  message_t message;
+  process_t *primary;
+  char buffer[MAX_PACKAGE_DATA_LENGTH];
+  
+  // configura mensagem perguntando se está tudo ok
+  config_message(&message, _MSG_TYPE_ARE_YOU_OK, 0, "", "");
+  
+  primary = (process_t *) other_processes->value;
+  
+  while(1) {
+    usleep(HEALTHCHECK_TIMEOUT * 1000000);
+    printf("> Are you ok, primary?\n");
+    
+    // envia mensagem
+    send_message2(primary->socket_id, message, &(primary->address));
+    
+    // aguarda resposta do primário dizendo que está ok
+    receive_message2(primary->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH);
+  }
+}
 
 int main(int argc, char **argv) {
   if (argc < 2) {
@@ -349,10 +372,7 @@ int main(int argc, char **argv) {
   
   // se for um processo backup
   if (self.role == BACKUP) {
-    // checa se foi fornecido o ip do processo primário correspondente
-    
-    
-    // se foi, conecta com ele
+    // conecta com o primário
     connect_to_primary(argv[2]);
     
     // e recebe do primário os dados dos outros processos backup para se conectar a eles também
@@ -362,8 +382,9 @@ int main(int argc, char **argv) {
     connect_to_others(argv);
     
     // cria uma thread pra ficar testando se o primário ainda está vivo
-    // pthread_t tid_healthcheck;
-    // pthread_create(&tid_healthcheck, NULL, primary_healthcheck, NULL);
+    pthread_t tid_healthcheck;
+    pthread_create(&tid_healthcheck, NULL, primary_healthcheck, NULL);
+    pthread_join(tid_healthcheck, NULL);
   }
   
   // cria uma thread pra ficar escutando os outros processos server
