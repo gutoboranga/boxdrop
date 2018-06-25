@@ -4,7 +4,7 @@
 #define PRIMARY 0
 #define BACKUP 1
 
-#define DEFAULT_PORT 4000
+#define DEFAULT_PORT 5000
 
 #define IP_STRING_LENGTH 30
 

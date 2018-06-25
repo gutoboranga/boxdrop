@@ -94,5 +94,6 @@ int create_socket(char *host, int port, struct sockaddr_in *server_address);
 int send_message2(int socket_id, message_t message, struct sockaddr_in *server_address);
 int receive_message2(int socket_id, char *buffer, int size);
 void config_message2(message_t *message, int type, int size, char *data, char *filename);
+void get_local_ip(char *buffer);
 
 #endif

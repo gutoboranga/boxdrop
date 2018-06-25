@@ -180,15 +180,11 @@ int create_socket(char *host, int port, struct sockaddr_in *server_address) {
   struct hostent *server;
   // struct sockaddr_in s_address;
   
-  printf("will gethostbyname %s\n", host);
-  
 	server = gethostbyname(host);
-  printf("server ERROR\n");
+  
 	if (server == NULL) {
-    printf("server ERROR\n");
     return ERROR;
   }
-  printf("server ok\n");
 
   // cria o socket
   int socket_id = socket(AF_INET, SOCK_DGRAM, 0);
@@ -234,4 +230,26 @@ void config_message2(message_t *message, int type, int size, char *data, char *f
   message->size = size;
   memcpy(message->data, data, MAX_PACKAGE_DATA_LENGTH);
   memcpy(message->filename, filename, MAXNAME);
+}
+
+void get_local_ip(char *buffer) {
+  
+    char hostbuffer[256];
+    char *IPbuffer;
+    struct hostent *hostentry;
+    int hostname;
+ 
+    // To retrieve hostname
+    hostname = gethostname(hostbuffer, sizeof(hostbuffer));
+    if (hostname == -1) buffer = NULL;
+ 
+    // To retrieve host information
+    hostentry = gethostbyname(hostbuffer);
+    if (hostentry == NULL) buffer = NULL;
+ 
+    // To convert an Internet network
+    // address into ASCII string
+    IPbuffer = inet_ntoa(*((struct in_addr*) hostentry->h_addr_list[0]));
+    
+    strcpy(buffer, IPbuffer);
 }

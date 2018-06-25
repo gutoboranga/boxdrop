@@ -438,15 +438,7 @@ int main(int argc, char *argv[]) {
   		if (n  < 0)
   			printf("ERROR on sendto");
     }
-
-    // printf("Received:\n\ttype: %i\n\tsize: %i\n\tfilename: %s\n", msg->type, msg->size, msg->filename);
-
   }
-
-
-
-		/* send to socket */
-
 
 	close(sockfd);
 	return 0;
