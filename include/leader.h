@@ -6,7 +6,8 @@
 
 #define DEFAULT_PORT 5000
 #define IP_STRING_LENGTH 30
-#define HEALTHCHECK_TIMEOUT 3
+#define HEALTHCHECK_FREQUENCY 3
+#define HEALTHCHECK_TIMEOUT 2
 
 #define MISSING_PARAMETER_FOR_BACKUP_PROCESS "Processos de backup devem informar o ip do processo primário como terceiro parâmetro.\nExemplo de uso:\n\n\t$./leader backup 127.0.0.1 5000\n\n"
 #define MISSING_PARAMETER "Parâmetro faltando.\nUso correto:\n\n\t$./leader primary\n\tou\n\t$./leader backup [ip do processo primário] [porta para conectar ao primário]\n\n"

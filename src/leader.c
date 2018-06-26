@@ -22,6 +22,9 @@ list_t *other_processes;
 int internal_port = DEFAULT_PORT;
 int internal_socket_id;
 
+pthread_t tid_listen;
+pthread_t tid_healthcheck;
+
 void init(int argc, char **argv) {
   get_local_ip(self.ip);
   self.port = internal_port;
@@ -214,15 +217,92 @@ void *primary_healthcheck() {
   primary = (process_t *) other_processes->value;
   
   while(1) {
-    usleep(HEALTHCHECK_TIMEOUT * 1000000);
+    usleep(HEALTHCHECK_FREQUENCY * 1000000);
     printf("> Are you ok, primary?\n");
     
     // envia mensagem
     send_message2(primary->socket_id, message, &(primary->address));
     
-    // aguarda resposta do primário dizendo que está ok
-    receive_message2(primary->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH);
+    // configura timeout no socket
+    struct timeval tv;
+    tv.tv_sec = HEALTHCHECK_TIMEOUT;
+    tv.tv_usec = 0;
+    
+    if (setsockopt(primary->socket_id, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
+        perror("Error");
+    }
+    
+    struct sockaddr_in from;
+    unsigned int length = sizeof(struct sockaddr_in);
+    
+    // se recv falhar devido ao timeout
+    if(recvfrom(primary->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &from, &length) < 0) {
+        printf("timeout!\n");
+        
+        remove_primary();
+        create_election();
+        
+    }
   }
+}
+
+list_t *get_primary(list_t *head) {
+  list_t *aux = head;
+  
+  while (aux != NULL) {
+    if ((int) ((process_t *) aux->value)->role == PRIMARY) {
+      return aux;
+    }
+    aux = aux->next;
+  }
+  
+  return NULL;
+}
+
+void remove_primary() {
+  // remove o processo primário da lista
+  process_t *primary = get_primary(other_processes);
+  if (primary != NULL) {
+    other_processes = list_remove_with_pid(other_processes, primary->pid);
+  }
+}
+
+void create_election() {
+  // enviar mensagem pra todos dizendo para parar a thread de healthcheck pois já detectou falha!
+  
+  // envia msg pra todos COM PID MAIOR QUE O SEU dizendo que houve uma falha no primário
+  
+  // se não houver nenhum com pid maior que o seu, este processo é o novo líder.
+  // neste caso,
+  // become_leader();
+}
+
+void become_leader() {
+  // cancela ambas threads: a que checa o primário e de comunicação com os outros processos
+  pthread_cancel(tid_healthcheck);
+  pthread_cancel(tid_listen);
+  
+  // atualiza a porta
+  self.port = DEFAULT_PORT;
+  
+  // reinicia a thread pra ficar escutando os outros processos
+  pthread_create(&tid_listen, NULL, listen_to_other_processes, NULL);
+  pthread_join(tid_listen, NULL);
+  
+  // manda mensagem pra todos processos dizendo que é o novo líder
+  
+  // outros processos devem atualizar na lista que este é PRIMARY e sua nova porta é 5000
+  
+  // processos devem reconectar com primario?
+  // talvez:
+  
+  // fecha conexão com o socket antigo
+  // socket.close(new_primary->socket_id);
+  
+  // atualiza os dados e abre o novo socket
+  // new_primary->role = PRIMARY;
+  // new_primary->port = DEFAULT_PORT;
+  // new_primary->socket_id = create_socket(new_primary->ip, DEFAULT_PORT, &(new_primary->address));
 }
 
 //
@@ -251,12 +331,10 @@ int main(int argc, char **argv) {
     connect_to_others(argv, &other_processes, &self);
     
     // cria uma thread pra ficar testando se o primário ainda está vivo
-    pthread_t tid_healthcheck;
     pthread_create(&tid_healthcheck, NULL, primary_healthcheck, NULL);
   }
   
   // cria uma thread pra ficar escutando os outros processos server
-  pthread_t tid_listen;
   pthread_create(&tid_listen, NULL, listen_to_other_processes, NULL);
   pthread_join(tid_listen, NULL);
     
