@@ -65,16 +65,6 @@ void list_insert(list_t **list, void *content) {
   }
 }
 
-void list_print(list_t *list) {
-
-  list_t *aux = list;
-  printf("printando a lista:\n");
-  while (aux != NULL) {
-    printf("%d\n", ((int) aux->value));
-    aux = aux->next;
-  }
-}
-
 list_t *list_invert(list_t *head) {
   list_t *next, *current, *previous;
   
@@ -93,38 +83,7 @@ list_t *list_invert(list_t *head) {
   return previous;
 }
 
-list_t *list_remove_with_pid(list_t *head, int pid) {
-  list_t *previous, *current;
-  current = previous = head;
-  
-  if (head == NULL) {
-    return NULL;
-  }
-  
-  if ((int) head->value == pid) {
-    current = head->next;
-    free(head);
-    
-    return current;
-  }
-  
-  do {
-    if ((int) ((process_t *) current->value)->pid == pid) {
-      previous->next = current->next;
-      
-      free(current);
-      current = NULL;
-      
-      return head;
-    }
-    
-    previous = current;
-    current = current->next;
-    
-  } while (current != NULL);
-  
-  return head;
-}
+
 
 // int main(int argc, char **argv) {
 //   list_t *head, *e1, *e2, *e3;

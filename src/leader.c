@@ -84,6 +84,8 @@ process_t *get_process_from_message(message_t *msg, struct sockaddr_in cli_addr)
   char *ip_string = inet_ntoa(new_process->address.sin_addr);
   memcpy(&new_process->address, &cli_addr, sizeof(cli_addr));
   strcpy(new_process->ip, inet_ntoa(new_process->address.sin_addr));
+
+	printf("ip string: %s\n", ip_string);
   
   return new_process;
 }
@@ -133,7 +135,7 @@ void *listen_to_other_processes() {
       message_t message;
       config_message(&message, _MSG_TYPE_CONNECTED, 0, "", "");
       send_message2(sockfd, message, &(new_backup->address));
-      
+      printf("respondi ok no ip %s e porta %d\n", new_backup->ip, new_backup->port);
       printf(BACKUP_CONNECTION_SUCCEDED, new_backup->pid);
     }
     
@@ -177,11 +179,11 @@ void *listen_to_other_processes() {
     
     // se for um backup dando oi para outro
     else if (msg->type == _MSG_TYPE_BACKUP_TO_BACKUP_CONNECT_PLEASE) {
+			printf("recebi uma msg de um processo\n");
       
       process_t *new_backup = get_process_from_message(msg, cli_addr);
       new_backup->socket_id = sockfd;
       
-      printf(BACKUP_CONNECTION_SUCCEDED, new_backup->pid);
       
       // adiciona o novo processo na lista de outros processos
       list_insert(&other_processes, new_backup);
@@ -240,7 +242,7 @@ void *primary_healthcheck() {
         printf("timeout!\n");
         
         remove_primary();
-        create_election();
+//        create_election();
         
     }
   }
@@ -260,15 +262,30 @@ list_t *get_primary(list_t *head) {
 }
 
 void remove_primary() {
-  // remove o processo primário da lista
-  process_t *primary = get_primary(other_processes);
-  if (primary != NULL) {
-    other_processes = list_remove_with_pid(other_processes, primary->pid);
-  }
+	// remove o processo primário da lista
+//	process_t *primary = get_primary(other_processes);
+//  if (primary != NULL) {
+//		other_processes = list_remove_with_pid(other_processes, primary->pid);
+//  }
 }
 
 void create_election() {
   // enviar mensagem pra todos dizendo para parar a thread de healthcheck pois já detectou falha!
+	message_t message;
+	list_t *aux;
+	process_t *p;
+
+  config_message(&message, _MSG_TYPE_LEADER_HAS_FAILED, 0, "", "");
+
+	aux = other_processes;
+
+	while (aux != NULL) {
+		p = (process_t *) aux->value;
+
+		send_message2(p->socket_id, message, &(p->address));
+		aux = aux->next;
+	}
+      
   
   // envia msg pra todos COM PID MAIOR QUE O SEU dizendo que houve uma falha no primário
   
@@ -319,11 +336,16 @@ int main(int argc, char **argv) {
   
   printf("Servidor %s rodando.\nPid: %d, Ip: %s, Porta: %d\n\n", self.role == 0 ? "primário" : "backup", self.pid, self.ip, self.port);
   
+	printf("role: %d\n", self.role);
+
   // se for um processo backup
   if (self.role == BACKUP) {
+		printf("PUTA QUE ME PARIU\n");
     // conecta com o primário
     connect_to_primary(argv[2], &other_processes, &self);
     
+	  printf("vou chamar essa funcao desgraçada\n");
+
     // e recebe do primário os dados dos outros processos backup para se conectar a eles também
     get_other_processes_data(&other_processes, &self);
     

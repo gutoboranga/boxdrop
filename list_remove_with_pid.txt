@@ -1,0 +1,32 @@
+list_t *list_remove_with_pid(list_t *head, int pid) {
+  list_t *previous, *current;
+  current = previous = head;
+  
+  if (head == NULL) {
+    return NULL;
+  }
+  
+  if ((int) head->value == pid) {
+    current = head->next;
+    free(head);
+    
+    return current;
+  }
+  
+  do {
+    if ((int) ((process_t *) current->value)->pid == pid) {
+      previous->next = current->next;
+      
+      free(current);
+      current = NULL;
+      
+      return head;
+    }
+    
+    previous = current;
+    current = current->next;
+    
+  } while (current != NULL);
+  
+  return head;
+}

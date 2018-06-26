@@ -27,5 +27,6 @@ typedef struct process {
 
 void print_processes_list();
 void receive_other_processes_data_from_primary(process_t *primary);
+void remove_primary();
 
 #endif

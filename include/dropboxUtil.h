@@ -49,6 +49,9 @@
 #define _MSG_TYPE_END_OF_PROCESS_DATA 104
 #define _MSG_TYPE_BACKUP_TO_BACKUP_CONNECT_PLEASE 105
 #define _MSG_TYPE_ARE_YOU_OK 106
+#define _MSG_TYPE_ELECTION 107
+#define _MSG_TYPE_I_AM_THE_LEADER 108
+#define _MSG_TYPE_LEADER_HAS_FAILED 109
 
 //--------------------------------------------------------------------------------
 // Structs

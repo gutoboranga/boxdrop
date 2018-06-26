@@ -40,15 +40,17 @@ void connect_to_primary(char *ip, list_t **other_processes, process_t *self) {
   message_t message;
   config_message(&message, _MSG_TYPE_CONNECT_PLEASE, 0, self_data_buffer, "");
   send_message2(primary->socket_id, message, &(primary->address));
+
+	printf("enviei coisa pro primario no ip %s\n", primary->ip);
   
   char buffer[MAX_PACKAGE_DATA_LENGTH];
-  
+  printf("vou receber OK do primario, acho\n");
   // aguarda resposta do primário dizendo OK
   receive_message2(primary->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH);
-  
+  printf("recebi um ok do primario\n");
   message_t *msg = malloc(sizeof(message_t));
   memcpy(msg, buffer, sizeof(message_t));
-  
+
   // se deu algum erro, exit
   if (msg->type != _MSG_TYPE_CONNECTED) {
     printf("ERRO AO CONECTAR COM PRIMÁRIO!\n");
@@ -61,11 +63,12 @@ void connect_to_primary(char *ip, list_t **other_processes, process_t *self) {
 
 
 void get_other_processes_data(list_t **other_processes, process_t *self) {
+  printf("entrou nessa merda de funcao\n");
   int there_are_processes_remaining = TRUE;
   char buffer[MAX_PACKAGE_DATA_LENGTH];
   message_t *msg = malloc(sizeof(message_t));
   process_t *primary = (process_t *) ((list_t *) *(other_processes))->value;
-  
+  printf("vou receber uns dados\n");
   // agora este processo receberá do primário os dados dos outros processos
   while(there_are_processes_remaining) {
     // envia uma mensagem pro primário pedindo dados de um processo
@@ -75,7 +78,7 @@ void get_other_processes_data(list_t **other_processes, process_t *self) {
     
     // aguarda resposta do primário contendo os dados de um dos outros processos de backup (se houver)
     receive_message2(primary->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH);
-    
+    printf("recebi uns dados\n");
     // deserializa
     memcpy(msg, buffer, sizeof(message_t));
     
@@ -100,6 +103,7 @@ void get_other_processes_data(list_t **other_processes, process_t *self) {
         } else {
           memcpy(&(self->address), &(p->address), sizeof(p->address));
           strcpy(self->ip, p->ip);
+					printf("\nMEU IP REAL: %s\n\n", p->ip);
         }
       }
     }
@@ -111,32 +115,35 @@ void connect_to_others(char **argv, list_t **other_processes, process_t *self) {
   char buffer[MAX_PACKAGE_DATA_LENGTH];
   list_t *aux = *(other_processes);
   process_t *p;
-  
+  printf("vou conectar c os outros\n");
   // percorre a lista de outros processos
   while (aux != NULL) {
     p = (process_t *) aux->value;
-    
+    printf("achei um p %d\n", p->pid);
     aux = aux->next;
     
     // se for o primário, pula
     if (p->role == PRIMARY) {
       continue;
     }
+
+    printf("nao era primario\n");
     
     // pra cada um, abre um socket
     p->socket_id = create_socket(p->ip, p->port, &(p->address));
-
+		    printf("abri um socket pro pid %d\n", p->pid);
     char buffer[MAX_PACKAGE_DATA_LENGTH];
     memcpy(buffer, self, sizeof(process_t));
     
     // e envia uma mensagem dizendo "oi, eu sou o processo tal, vamos nos conectar?"
     message_t message;
+		printf("vou enviar uma msg pro pid %d\n", p->pid);
     config_message(&message, _MSG_TYPE_BACKUP_TO_BACKUP_CONNECT_PLEASE, 0, buffer, "");
     send_message2(p->socket_id, message, &(p->address));
-    
+    		printf("enviei uma msg pro pid %d na porta %d com ip %s\n", p->pid, p->port, p->ip);
     // aguarda a resposta
     receive_message2(p->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH);
-    
+    		printf("recebi resp do pid %d\n", p->pid);
     printf(BACKUP_CONNECTION_SUCCEDED, p->pid);
   }
 }
