@@ -55,140 +55,6 @@ char *serialize_process(process_t *p) {
   return buffer;
 }
 
-void connect_to_primary(char *ip) {
-  process_t *primary = malloc(sizeof(process_t));
-  
-  strcpy(primary->ip, ip);
-  primary->role = PRIMARY;
-  primary->port = DEFAULT_PORT;
-  primary->socket_id = create_socket(primary->ip, DEFAULT_PORT, &(primary->address));
-  
-  // adiciona o primário na lista dos outros processos
-  other_processes = list_make_node(primary);
-  
-  // serializa a struct process_t do self
-  char self_data_buffer[MAX_PACKAGE_DATA_LENGTH];
-  memcpy(self_data_buffer, &self, sizeof(self));
-  
-  // envia uma mensagem pro primário pedindo pra conectar e enviando seus dados
-  message_t message;
-  config_message(&message, _MSG_TYPE_CONNECT_PLEASE, 0, self_data_buffer, "");
-  send_message2(primary->socket_id, message, &(primary->address));
-  
-  char buffer[MAX_PACKAGE_DATA_LENGTH];
-  
-  // aguarda resposta do primário dizendo OK
-  receive_message2(primary->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH);
-  
-  message_t *msg = malloc(sizeof(message_t));
-  memcpy(msg, buffer, sizeof(message_t));
-  
-  // se deu algum erro, exit
-  if (msg->type != _MSG_TYPE_CONNECTED) {
-    printf("ERRO AO CONECTAR COM PRIMÁRIO!\n");
-    exit(-1);
-  }
-  free(msg);
-  
-  printf("> Conexão com processo primário feita com sucessso!\n\n");
-}
-
-void get_other_processes_data() {
-  int there_are_processes_remaining = TRUE;
-  char buffer[MAX_PACKAGE_DATA_LENGTH];
-  message_t *msg = malloc(sizeof(message_t));
-  process_t *primary = (process_t *) other_processes->value;
-  
-  // agora este processo receberá do primário os dados dos outros processos
-  while(there_are_processes_remaining) {
-    // envia uma mensagem pro primário pedindo dados de um processo
-    message_t message;
-    config_message(&message, _MSG_TYPE_PLEASE_GIVE_ME_PROCESSESS_DATA, 0, "", "");
-    send_message2(primary->socket_id, message, &(primary->address));
-    
-    // aguarda resposta do primário contendo os dados de um dos outros processos de backup (se houver)
-    receive_message2(primary->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH);
-    
-    // deserializa
-    memcpy(msg, buffer, sizeof(message_t));
-    
-    // acabaram os processos
-    if (msg->type == _MSG_TYPE_END_OF_PROCESS_DATA) {
-      there_are_processes_remaining = FALSE;
-    }
-    
-    // se veio algo no campo data da mensagem, tem processo
-    // se não veio, acabaram os processos da lista do primário e acabou o laço
-    if (strcmp(msg->data, "") != 0) {
-      process_t *p = malloc(sizeof(process_t));
-      memcpy(p, msg->data, sizeof(process_t));
-      
-      // se forem dados do primário, apenas atualiza o pid dele na lista
-      if (p->role == PRIMARY) {
-        primary->pid = p->pid;
-      } else {
-        // se o processo recebido não for o próprio
-        if (p->pid != self.pid) {
-          list_insert(&other_processes, p);
-        } else {
-          memcpy(&self.address, &(p->address), sizeof(p->address));
-          strcpy(self.ip, p->ip);
-        }
-      }
-    }
-  }
-  print_processes_list();
-}
-
-// void send_message() {
-//   // manda uma mensagem de login pro servidor
-//   message_t message;
-//   config_message(&message, MSG_TYPE_LOGIN, 0, username, "");
-//   send_message(socket_id, message);
-//
-//   // espera a resposta (ack)
-//   char ack_buffer[MAX_PACKAGE_DATA_LENGTH];
-//   receive_message(socket_id, ack_buffer, MAX_PACKAGE_DATA_LENGTH);
-//
-//   if (strcmp(ack_buffer, "ok") != 0) {
-//     printf("%s", ack_buffer);
-//     return ERROR;
-//   }
-// }
-
-void connect_to_others(char **argv) {
-  char buffer[MAX_PACKAGE_DATA_LENGTH];
-  list_t *aux = other_processes;
-  process_t *p;
-  
-  // percorre a lista de outros processos
-  while (aux != NULL) {
-    p = (process_t *) aux->value;
-    
-    aux = aux->next;
-    
-    // se for o primário, pula
-    if (p->role == PRIMARY) {
-      continue;
-    }
-    
-    // pra cada um, abre um socket
-    p->socket_id = create_socket(p->ip, p->port, &(p->address));
-
-    char buffer[MAX_PACKAGE_DATA_LENGTH];
-    memcpy(buffer, &self, sizeof(process_t));
-    
-    // e envia uma mensagem dizendo "oi, eu sou o processo tal, vamos nos conectar?"
-    message_t message;
-    config_message(&message, _MSG_TYPE_BACKUP_TO_BACKUP_CONNECT_PLEASE, 0, buffer, "");
-    send_message2(p->socket_id, message, &(p->address));
-    
-    // aguarda a resposta
-    receive_message2(p->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH);
-    
-    printf("> Conexão com processo backup com pid %d feita com sucessso!\n\n", p->pid);
-  }
-}
 
 void print_processes_list() {
   list_t *aux = other_processes;
@@ -265,7 +131,7 @@ void *listen_to_other_processes() {
       config_message(&message, _MSG_TYPE_CONNECTED, 0, "", "");
       send_message2(sockfd, message, &(new_backup->address));
       
-      printf("> Conexão com processo backup feita com sucesso!\nPid: %d\n\n", new_backup->pid);
+      printf(BACKUP_CONNECTION_SUCCEDED, new_backup->pid);
     }
     
     // se recebeu uma mensagem pedindo dados de um processo
@@ -312,7 +178,7 @@ void *listen_to_other_processes() {
       process_t *new_backup = get_process_from_message(msg, cli_addr);
       new_backup->socket_id = sockfd;
       
-      printf("Um processo novo quer conectar. Seu pid é %d e o socket_id %d\n", new_backup->pid, new_backup->socket_id);
+      printf(BACKUP_CONNECTION_SUCCEDED, new_backup->pid);
       
       // adiciona o novo processo na lista de outros processos
       list_insert(&other_processes, new_backup);
@@ -359,6 +225,9 @@ void *primary_healthcheck() {
   }
 }
 
+//
+// main
+//
 int main(int argc, char **argv) {
   if (argc < 2) {
     printf(MISSING_PARAMETER);
@@ -373,18 +242,17 @@ int main(int argc, char **argv) {
   // se for um processo backup
   if (self.role == BACKUP) {
     // conecta com o primário
-    connect_to_primary(argv[2]);
+    connect_to_primary(argv[2], &other_processes, &self);
     
     // e recebe do primário os dados dos outros processos backup para se conectar a eles também
-    get_other_processes_data();
+    get_other_processes_data(&other_processes, &self);
     
     // conecta aos outros processos backup
-    connect_to_others(argv);
+    connect_to_others(argv, &other_processes, &self);
     
     // cria uma thread pra ficar testando se o primário ainda está vivo
     pthread_t tid_healthcheck;
     pthread_create(&tid_healthcheck, NULL, primary_healthcheck, NULL);
-    pthread_join(tid_healthcheck, NULL);
   }
   
   // cria uma thread pra ficar escutando os outros processos server

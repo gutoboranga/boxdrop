@@ -12,6 +12,9 @@
 #define MISSING_PARAMETER "Parâmetro faltando.\nUso correto:\n\n\t$./leader primary\n\tou\n\t$./leader backup [ip do processo primário] [porta para conectar ao primário]\n\n"
 #define INVALID_PARAMETER "Parâmetro não reconhecido.\nValores possíveis:\n\n\tprimary\n\tbackup\n\n"
 
+#define BACKUP_CONNECTION_SUCCEDED "> Conexão com processo backup feita com sucesso!\nPid: %d\n\n"
+#define PRIMARY_CONNECTION_SUCCEDED "> Conexão com processo primário feita com sucessso!\n\n"
+
 typedef struct process {
   int pid;
   char ip[IP_STRING_LENGTH];
