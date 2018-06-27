@@ -545,6 +545,7 @@ void *handle_client_requests(void *process) {
 
     // se recebeu dados
     else if (msg->type == MSG_TYPE_DATA) {
+      // pega apenas a parte importante da área de dados da mensagem
       char data_on_right_size[MAX_PACKAGE_DATA_LENGTH + 1];
       memcpy(data_on_right_size, msg->data, msg->size);
       data_on_right_size[msg->size] = '\0';
@@ -568,26 +569,12 @@ void *handle_client_requests(void *process) {
       // ver se tem / no filepath. se tiver, pegar apenas ultima parte, que é o nome do arquivo mesmo
       printf("will write to: %s\n", filepath);
 
-      // escreve no arquivprintf("%s LOGGED IN\n", msg->data);
+      // escreve no arquivo
+      write_to_file(filepath, data_on_right_size);
 
       n = sendto(sockfd, "ok", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
   		if (n  < 0)
   			printf("ERROR on sendto");
-
-      // salva o nome do usuario
-      strcpy(username, msg->data);
-
-      // cria uma string com o path completo "sync_dir_<USER NAME>/"
-      strcpy(user_dir_path, "sync_dir_");
-      strcat(user_dir_path, username);
-      strcat(user_dir_path, "/");
-
-      printf("USER_DIR_PATH: %s\n", user_dir_path);
-
-      // se não existe o dir ainda, cria
-      if(!dir_exists(user_dir_path)) {
-        mkdir(user_dir_path, S_IRWXU | S_IRWXG | S_IRWXO);
-      }
     }
 
     // se recebeu uma mensagem que vai receber um arquivo
