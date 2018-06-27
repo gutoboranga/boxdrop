@@ -10,6 +10,8 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <list.h>
+#include <process.h>
 
 void read_command(char *command, char *argument, int size) {
   fgets(command, size, stdin);
@@ -252,4 +254,33 @@ void get_local_ip(char *buffer) {
     IPbuffer = inet_ntoa(*((struct in_addr*) hostentry->h_addr_list[0]));
     
     strcpy(buffer, IPbuffer);
+}
+
+//
+// broadcast_message
+//
+// envia a mensagem m para todos processos com pid maior que o int pid
+// retorna o número de processos pros quais enviou alerta
+//
+int broadcast_message(message_t *m, list_t **other_processes, int pid) {
+  list_t *aux;
+	process_t *p;
+  
+  int sent_count = 0;
+  
+  aux = *(other_processes);
+
+	while (aux != NULL) {
+		p = (process_t *) aux->value;
+
+    // se o pid do processo for maior que o recebido por parâmetro
+    if (p->pid > pid && p->role != PRIMARY) {
+      send_message2(p->socket_id, *m, &(p->address));
+      sent_count += 1;
+    }
+    
+		aux = aux->next;
+	}
+  
+  return sent_count;
 }

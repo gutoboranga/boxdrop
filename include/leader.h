@@ -2,14 +2,7 @@
 #define LEADER_H_
 
 #include <list.h>
-
-#define PRIMARY 0
-#define BACKUP 1
-
-#define DEFAULT_PORT 5000
-#define IP_STRING_LENGTH 30
-#define HEALTHCHECK_FREQUENCY 4
-#define HEALTHCHECK_TIMEOUT 2
+#include <process.h>
 
 #define MISSING_PARAMETER_FOR_BACKUP_PROCESS "Processos de backup devem informar o ip do processo primário como terceiro parâmetro.\nExemplo de uso:\n\n\t$./leader backup 127.0.0.1 5000\n\n"
 #define MISSING_PARAMETER "Parâmetro faltando.\nUso correto:\n\n\t$./leader primary\n\tou\n\t$./leader backup [ip do processo primário] [porta para conectar ao primário]\n\n"
@@ -28,19 +21,10 @@
 #define SERVER_UP_AND_RUNNING "Servidor %s rodando.\nPid: %d, Ip: %s, Porta: %d\n\n", self.role == 0 ? "primário" : "backup", self.pid, self.ip, self.port
 
 
-typedef struct process {
-  int pid;
-  char ip[IP_STRING_LENGTH];
-  int role;
-  int socket_id;
-  int port;
-  struct sockaddr_in address;
-} process_t;
-
 void print_processes_list();
 void receive_other_processes_data_from_primary(process_t *primary);
 void remove_primary();
-int broadcast_message(message_t *m, int pid);
+// int broadcast_message(message_t *m, int pid);
 void handle_primary_failure();
 void warn_leader_failure();
 void create_election();

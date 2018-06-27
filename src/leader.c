@@ -15,6 +15,7 @@
 #include <leader.h>
 #include <list.h>
 #include <backup.h>
+#include <process.h>
 
 process_t self;
 list_t *other_processes;
@@ -24,6 +25,7 @@ int internal_socket_id;
 
 pthread_t tid_listen;
 pthread_t tid_healthcheck;
+pthread_t tid_client;
 
 void init(int argc, char **argv) {
   get_local_ip(self.ip);
@@ -193,7 +195,7 @@ void *listen_to_other_processes() {
     
     // se for uma mensagem de healthcheck
     else if (msg->type == _MSG_TYPE_ARE_YOU_OK) {
-      printf("> I'm fine, thanks!\n");
+      // printf("> I'm fine, thanks!\n");
       
       // responde dizendo OK
       message_t message;
@@ -260,7 +262,7 @@ void *primary_healthcheck() {
   
   while(1) {
     usleep(HEALTHCHECK_FREQUENCY * 1000000);
-    printf("> Are you ok, primary?\n");
+    // printf("> Are you ok, primary?\n");
     
     // envia mensagem
     send_message2(primary->socket_id, message, &(primary->address));
@@ -328,7 +330,7 @@ void warn_leader_failure() {
   // enviar mensagem pra todos dizendo para parar a thread de healthcheck pois já detectou falha!
 	message_t message;
   config_message(&message, _MSG_TYPE_LEADER_HAS_FAILED, 0, "", "");
-  int count = broadcast_message(&message, 0);
+  int count = broadcast_message(&message, &other_processes, 0);
   
   printf(BACKUP_HAS_WARNED_ABOUT_PRIMARY_FAILURE, count);
   
@@ -340,40 +342,11 @@ void warn_leader_failure() {
   }
 }
 
-//
-// broadcast_message
-//
-// envia a mensagem m para todos processos com pid maior que o int pid
-// retorna o número de processos pros quais enviou alerta
-//
-int broadcast_message(message_t *m, int pid) {
-  list_t *aux;
-	process_t *p;
-  
-  int sent_count = 0;
-  
-  aux = other_processes;
-
-	while (aux != NULL) {
-		p = (process_t *) aux->value;
-
-    // se o pid do processo for maior que o recebido por parâmetro
-    if (p->pid > pid && p->role != PRIMARY) {
-      send_message2(p->socket_id, *m, &(p->address));
-      sent_count += 1;
-    }
-    
-		aux = aux->next;
-	}
-  
-  return sent_count;
-}
-
 void create_election() {
   // envia msg pra todos COM PID MAIOR QUE O SEU dizendo que houve uma falha no primário
   message_t message;
   config_message(&message, _MSG_TYPE_ELECTION, 0, "", "");
-  int count = broadcast_message(&message, self.pid);
+  int count = broadcast_message(&message, &other_processes, self.pid);
   
   // se não houver nenhum com pid maior que o seu, este processo é o novo líder!
   if (count == 0) {
@@ -400,7 +373,7 @@ void become_leader() {
   // envia pra todos
   message_t message;
   config_message(&message, _MSG_TYPE_I_AM_THE_LEADER, 0, self_data_buffer, "");
-  int count = broadcast_message(&message, 0);
+  int count = broadcast_message(&message, &other_processes, 0);
   
   // cancela a thread de comunicação com os outros processos
   // mas não se preocupe, ela será reiniciada quando a execução voltar à thread main
@@ -466,7 +439,6 @@ int main(int argc, char **argv) {
     pthread_join(tid_listen, NULL);
   }
   
-    
   // tudo pronto, processo pode agir normalmente
   // do_something();
 }
