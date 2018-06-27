@@ -16,6 +16,7 @@
 #include <list.h>
 #include <backup.h>
 #include <process.h>
+#include <dropboxServer.h>
 
 process_t self;
 list_t *other_processes;

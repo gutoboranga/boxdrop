@@ -739,6 +739,12 @@ int handle_client_requests(process_t *self) {
   			printf("ERROR on logout");
     }
 
+    // Se o processo corrente é primário, deve repassar a mensagem aos secundários,
+    // não importa o tipo da mensagem
+    if (self->role == PRIMARY) {
+      printf("Sou lindo\n");
+      // broadcast_message(message_t *m, list_t **other_processes, int pid);
+    }
 
     // senão...
     else {
