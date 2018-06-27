@@ -115,11 +115,11 @@ void connect_to_others(char **argv, list_t **other_processes, process_t *self) {
   char buffer[MAX_PACKAGE_DATA_LENGTH];
   list_t *aux = *(other_processes);
   process_t *p;
-  printf("vou conectar c os outros\n");
+  // printf("vou conectar c os outros\n");
   // percorre a lista de outros processos
   while (aux != NULL) {
     p = (process_t *) aux->value;
-    printf("achei um p %d\n", p->pid);
+    // printf("achei um p %d\n", p->pid);
     aux = aux->next;
     
     // se for o primário, pula
@@ -127,23 +127,75 @@ void connect_to_others(char **argv, list_t **other_processes, process_t *self) {
       continue;
     }
 
-    printf("nao era primario\n");
+    // printf("nao era primario\n");
     
     // pra cada um, abre um socket
     p->socket_id = create_socket(p->ip, p->port, &(p->address));
-		    printf("abri um socket pro pid %d\n", p->pid);
+		    // printf("abri um socket pro pid %d\n", p->pid);
     char buffer[MAX_PACKAGE_DATA_LENGTH];
     memcpy(buffer, self, sizeof(process_t));
     
     // e envia uma mensagem dizendo "oi, eu sou o processo tal, vamos nos conectar?"
     message_t message;
-		printf("vou enviar uma msg pro pid %d\n", p->pid);
+		// printf("vou enviar uma msg pro pid %d\n", p->pid);
     config_message(&message, _MSG_TYPE_BACKUP_TO_BACKUP_CONNECT_PLEASE, 0, buffer, "");
     send_message2(p->socket_id, message, &(p->address));
-    		printf("enviei uma msg pro pid %d na porta %d com ip %s\n", p->pid, p->port, p->ip);
+    		// printf("enviei uma msg pro pid %d na porta %d com ip %s\n", p->pid, p->port, p->ip);
     // aguarda a resposta
     receive_message2(p->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH);
-    		printf("recebi resp do pid %d\n", p->pid);
+    		// printf("recebi resp do pid %d\n", p->pid);
     printf(BACKUP_CONNECTION_SUCCEDED, p->pid);
   }
+}
+
+process_t *get_process_from_pid(list_t **other_processes, int pid) {
+  char buffer[MAX_PACKAGE_DATA_LENGTH];
+  list_t *aux = *(other_processes);
+  process_t *p = NULL;
+
+  // percorre a lista dos processos
+  while (aux != NULL) {
+    p = (process_t *) aux->value;
+    
+    aux = aux->next;
+    
+    // se for o p com pid == ao que queremos
+    if (p->pid == pid) {
+      return p;
+    }
+  }
+  return p;
+}
+
+list_t *list_remove_with_pid(list_t *head, int pid) {
+  list_t *previous, *current;
+  current = previous = head;
+  
+  if (head == NULL) {
+    return NULL;
+  }
+  
+  if ((int) ((process_t *) head->value)->pid == pid) {
+    current = head->next;
+    free(head);
+    
+    return current;
+  }
+  
+  do {
+    if ((int) ((process_t *) current->value)->pid == pid) {
+      previous->next = current->next;
+      
+      free(current);
+      current = NULL;
+      
+      return head;
+    }
+    
+    previous = current;
+    current = current->next;
+    
+  } while (current != NULL);
+  
+  return head;
 }

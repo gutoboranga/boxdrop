@@ -28,5 +28,11 @@ typedef struct process {
 void print_processes_list();
 void receive_other_processes_data_from_primary(process_t *primary);
 void remove_primary();
+int broadcast_message(message_t *m, int pid);
+void handle_primary_failure();
+void warn_leader_failure();
+void create_election();
+void become_leader();
+void *primary_healthcheck();
 
 #endif
