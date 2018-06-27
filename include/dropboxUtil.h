@@ -102,5 +102,7 @@ int receive_message2(int socket_id, char *buffer, int size);
 void config_message2(message_t *message, int type, int size, char *data, char *filename);
 void get_local_ip(char *buffer);
 int broadcast_message(message_t *m, list_t **other_processes, int pid);
+int broadcast_message_2(message_t *m, list_t **other_processes);
+void open_secondary_sockets(list_t **backup_processes, process_t *self);
 
 #endif

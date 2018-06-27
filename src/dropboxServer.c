@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <list.h>
+#include <process.h>
 
 int socket_fd;
 socklen_t client_length;
@@ -18,6 +20,8 @@ struct sockaddr_in client_address;
 char *username;
 char *user_dir_path;
 int num_connections = 0;
+
+extern list_t *other_processes;
 
 void sync_server() {
 }
@@ -444,12 +448,22 @@ int send_all() {
 // 	return 0;
 // }
 
-int handle_client_requests(process_t *self) {
+//
+// handle_client_requests: antinga main do dropboxServer
+//
+// função responsável por receber e tratar os requests do client
+//
+void *handle_client_requests(void *process) {
 	int sockfd, n;
 	socklen_t clilen;
 	struct sockaddr_in serv_addr, cli_addr;
 	char buf[MAX_PACKAGE_DATA_LENGTH];
-
+  
+  process_t *self;
+  self = (process_t *) process;
+  
+  printf("> Escutando mensagens do cliente na porta %d\n\n", self->port - PORT_OFFSET);
+  
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) printf("ERROR opening socket");
 
   // inicializa username e user_dir_path
@@ -457,7 +471,7 @@ int handle_client_requests(process_t *self) {
   user_dir_path = malloc(sizeof(char) * PATH_MAX_SIZE);
 
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(self->port - 1000);
+	serv_addr.sin_port = htons(self->port - PORT_OFFSET);
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	bzero(&(serv_addr.sin_zero), 8);
 
@@ -650,7 +664,7 @@ int handle_client_requests(process_t *self) {
       int n = sendto(sockfd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
       if (n < 0) {
         printf("ERROR sendto");
-        return ERROR;
+        exit(ERROR);
       }
 
       free(buffer);
@@ -658,7 +672,7 @@ int handle_client_requests(process_t *self) {
 
     else if (msg->type == MSG_TYPE_DELETE_ALL) {
       // vai deletar tudo
-      printf("Will clean.\n");
+      // printf("Will clean.\n");
 
       delete_all(user_dir_path);
 
@@ -666,7 +680,7 @@ int handle_client_requests(process_t *self) {
       int n = sendto(sockfd, "ok", 12, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
       if (n < 0) {
         printf("ERROR sendto");
-        return ERROR;
+        exit(ERROR);
       }
     }
 
@@ -675,7 +689,7 @@ int handle_client_requests(process_t *self) {
       int n = sendto(sockfd, "ok", 12, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
       if (n < 0) {
         printf("ERROR sendto");
-        return ERROR;
+        exit(ERROR);
       }
 
       // espera o client dizer que está preparado
@@ -694,7 +708,8 @@ int handle_client_requests(process_t *self) {
       dir = opendir(dirpath);
 
       if (dir == NULL) {
-        return ERROR;
+        printf("Dir NULL error\n");
+        exit(ERROR);
       }
 
       int j;
@@ -739,22 +754,20 @@ int handle_client_requests(process_t *self) {
   			printf("ERROR on logout");
     }
 
+    // // senão...
+    // else {
+    //   printf("Received a datagram: %s\n\n", message_buffer);
+    //   n = sendto(sockfd, "Got some data\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
+  	// 	if (n  < 0)
+  	// 		printf("ERROR on sendto");
+    // }
+    
     // Se o processo corrente é primário, deve repassar a mensagem aos secundários,
     // não importa o tipo da mensagem
     if (self->role == PRIMARY) {
-      printf("Sou lindo\n");
-      // broadcast_message(message_t *m, list_t **other_processes, int pid);
-    }
-
-    // senão...
-    else {
-      printf("Received a datagram: %s\n\n", message_buffer);
-      n = sendto(sockfd, "Got some data\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-  		if (n  < 0)
-  			printf("ERROR on sendto");
+      broadcast_message_2(msg, &other_processes);
     }
   }
 
 	close(sockfd);
-	return 0;
 }

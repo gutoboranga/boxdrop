@@ -19,7 +19,7 @@
 #include <dropboxServer.h>
 
 process_t self;
-list_t *other_processes;
+extern list_t *other_processes;
 
 int internal_port = DEFAULT_PORT;
 int internal_socket_id;
@@ -128,6 +128,7 @@ void *listen_to_other_processes() {
       
       process_t *new_backup = get_process_from_message(msg, cli_addr);
       new_backup->socket_id = sockfd;
+      new_backup->socket_id_2 = create_socket(new_backup->ip, new_backup->port - PORT_OFFSET, &(new_backup->address_2));
       
       // adiciona o novo processo na lista de outros processos
       list_insert(&other_processes, new_backup);
@@ -136,6 +137,8 @@ void *listen_to_other_processes() {
       message_t message;
       config_message(&message, _MSG_TYPE_CONNECTED, 0, "", "");
       send_message2(sockfd, message, &(new_backup->address));
+      
+      // TODO: abrir socket na porta do processo - 1000 pra poder depois passar adiante as mensagens recebidas do client
       
       printf(BACKUP_CONNECTION_SUCCEDED, new_backup->pid);
     }
@@ -380,6 +383,9 @@ void become_leader() {
   // mas não se preocupe, ela será reiniciada quando a execução voltar à thread main
   pthread_cancel(tid_listen);
   
+  // reabre os sockets secundários para repassar as mensagens do cliente
+  open_secondary_sockets(&other_processes, &self);
+  
   // printf("Cancelei a thread antiga de listen\n");
   
   //
@@ -437,6 +443,10 @@ int main(int argc, char **argv) {
   while(1) {
     // cria uma thread pra ficar escutando os outros processos server
     pthread_create(&tid_listen, NULL, listen_to_other_processes, NULL);
+    
+    // cria uma thread pra responder aos requests do cliente (parte 1 do trabalho)
+    pthread_create(&tid_client, NULL, handle_client_requests, (void *) &self);
+    
     pthread_join(tid_listen, NULL);
   }
   

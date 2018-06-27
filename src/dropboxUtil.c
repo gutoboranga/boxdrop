@@ -284,3 +284,39 @@ int broadcast_message(message_t *m, list_t **other_processes, int pid) {
   
   return sent_count;
 }
+
+// semelhante à anterior mas usa socket_id_2 e address_2 e não confere o pid, envia pra todos
+// podia ser melhor mas são 3 da matina
+int broadcast_message_2(message_t *m, list_t **other_processes) {
+  list_t *aux;
+	process_t *p;
+  
+  int sent_count = 0;
+  
+  aux = *(other_processes);
+
+	while (aux != NULL) {
+		p = (process_t *) aux->value;
+    
+    send_message2(p->socket_id_2, *m, &(p->address_2));
+    sent_count += 1;
+    
+		aux = aux->next;
+	}
+  
+  return sent_count;
+}
+
+// abre um socket secundário na porta (p->port - 1000)
+// para cada processo backup
+void open_secondary_sockets(list_t **backup_processes, process_t *self) {
+  list_t *aux = *(backup_processes);
+  process_t *p;
+  
+  while (aux != NULL) {
+    p = (process_t *) aux->value;
+    p->socket_id_2 = create_socket(p->ip, p->port - PORT_OFFSET, &(p->address_2));
+    
+    aux = aux->next;
+  }
+}
