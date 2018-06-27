@@ -1,11 +1,27 @@
-all:
-	gcc -c src/dropboxUtil.c -I include -o bin/dropboxUtil
-	gcc src/dropboxClient.c bin/dropboxUtil -I include -o bin/dropboxClient
-	gcc src/dropboxServer.c bin/dropboxUtil -I include -o bin/server/dropboxServer
+all: clean compile
 	
-leader_test:
-	gcc -c src/dropboxUtil.c -I include -o bin/dropboxUtil
-	gcc -c src/dropboxServer.c -I include -o bin/dropboxServer
-	gcc -c src/list.c -I include -o bin/list
-	gcc -c src/backup.c -I include -o bin/backup
-	gcc -pthread src/leader.c bin/dropboxUtil bin/dropboxServer bin/list bin/backup -I include -o leader
+compile:
+	@echo "> Compilando"
+	@gcc -c src/dropboxUtil.c -I include -o bin/dropboxUtil
+	@gcc -c src/dropboxServerFront.c -I include -o bin/dropboxServerFront
+	@gcc -c src/list.c -I include -o bin/list
+	@gcc -c src/backup.c -I include -o bin/backup
+	@gcc -pthread src/dropboxServer.c bin/dropboxUtil bin/dropboxServerFront bin/list bin/backup -I include -o server/dropboxServer
+	
+	@mkdir server2/
+	@mkdir server3/
+	
+	@cp -r server/ server2/
+	@cp -r server/ server3/
+	
+	@gcc src/dropboxClient.c bin/dropboxUtil -I include -o client/dropboxClient
+	
+	@echo "> Tudo pronto!"
+
+clean:
+	@echo "> Limpando"
+	@rm -rf bin/*
+	@rm -rf server/*
+	@rm -rf client/*
+	@rm -rf server2/
+	@rm -rf server3/

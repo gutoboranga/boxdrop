@@ -13,12 +13,19 @@ make
 To execute client, run (with valid parameters):
 
 ```
-./bin/dropboxClient usuario endereco porta
+./client/dropboxClient <user> <ip> <server port>
 ```
 
-To execute server, run:
+To execute server, there are two possibilities:
+
+- To run as primary server:
 
 ```
-cd bin/server
-./dropboxServer
+./server/dropboxServer primary
+```
+
+- To run as backup server:
+
+```
+./server/dropboxServer backup <primary process ip> <port>
 ```

@@ -1,760 +1,455 @@
-#include <dropboxServer.h>
-#include <dropboxUtil.h>
-#include <sys/stat.h>
+#include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <ifaddrs.h>
 #include <arpa/inet.h>
-#include <dirent.h>
 #include <unistd.h>
 #include <netdb.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
+#include <pthread.h>
+#include <dropboxUtil.h>
+#include <sys/stat.h>
+#include <dropboxServer.h>
 #include <list.h>
+#include <backup.h>
 #include <process.h>
+#include <dropboxServerFront.h>
 
-int socket_fd;
-socklen_t client_length;
-struct sockaddr_in client_address;
-char *username;
-char *user_dir_path;
-int num_connections = 0;
-
+process_t self;
 extern list_t *other_processes;
 
-void sync_server() {
-}
+int internal_port = DEFAULT_PORT;
+int internal_socket_id;
 
-void receive_file(char *file) {
-}
+pthread_t tid_listen;
+pthread_t tid_healthcheck;
+pthread_t tid_client;
 
-int send_file(char *file) {
-  int done_reading = 0;
-  int start_index = 0;
-
-  char buffer[MAX_PACKAGE_DATA_LENGTH];
-  char ack_buffer[MAX_PACKAGE_DATA_LENGTH];
-  char message_buffer[sizeof(message_t)];
-  message_t message;
-
-  int n = recvfrom(socket_fd, ack_buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &client_address, &client_length);
-
-  // enquanto houver coisa para ler no arquivo, vai lendo ele aos pedacinhos (de tamanho MAX_PACKAGE_DATA_LENGTH = 128)
-  // e os enviando para o servidor
-  while(!done_reading) {
-    int chars_read = read_file_content(file, buffer, start_index, MAX_PACKAGE_DATA_LENGTH);
-    printf("READ:\n%.128s\n-------------\n", buffer);
-
-    start_index += chars_read;
-
-    // se leu alguma coisa at all
-    if (chars_read > 0) {
-      config_message(&message, MSG_TYPE_DATA, chars_read, (char *) &buffer, file);
-
-      memcpy(message_buffer, &message, sizeof(message));
-
-      n = sendto(socket_fd, message_buffer, sizeof(message_buffer), 0, (struct sockaddr *) &client_address, sizeof(struct sockaddr));
-      if (n < 0) {
-        printf("ERROR sendto");
-        return ERROR;
-      }
-
-      n = recvfrom(socket_fd, ack_buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &client_address, &client_length);
-      if (n < 0) {
-        printf("ERROR recvfrom");
-        return ERROR;
-      }
+void init(int argc, char **argv) {
+  get_local_ip(self.ip);
+  self.port = internal_port;
+  self.pid = getpid();
+  
+  // handle process role input
+  if (strcmp(argv[1], "primary") == 0) {
+    self.role = PRIMARY;
+  } else if (strcmp(argv[1], "backup") == 0) {
+    self.role = BACKUP;
+    
+    // se estiver faltando argumentos
+    if (argc < 4) {
+      printf(MISSING_PARAMETER_FOR_BACKUP_PROCESS);
+      exit(1);
     }
-
-    // se leu menos do que o máximo que poderia, terminou de ler o arquivo.
-    if (chars_read < MAX_PACKAGE_DATA_LENGTH) {
-      done_reading = 1;
-    }
+    
+    // salva a porta especificada
+    self.port = atoi(argv[3]);
+    
+  } else {
+    printf(INVALID_PARAMETER);
+    exit(1);
   }
+}
 
-  // quando acabar, envia uma última mensagem ao cliente avisando que acabou de mandar todo o arquivo
-  config_message(&message, MSG_END_OF_TRANSMISSION, 0, "", file);
-  memcpy(message_buffer, &message, sizeof(message));
-
-  n = sendto(socket_fd, message_buffer, sizeof(message_buffer), 0, (const struct sockaddr *) &client_address, sizeof(struct sockaddr_in));
-  if (n < 0) {
-    printf("ERROR sendto");
-    return ERROR;
-  }
-
-  return SUCCESS;
+char *serialize_process(process_t *p) {
+  char *buffer = malloc(sizeof(char) * MAX_PACKAGE_DATA_LENGTH);
+  memcpy(buffer, &p, sizeof(process_t));
+  
+  return buffer;
 }
 
 
-int send_all() {
-  DIR *dir;
-  int success = 0;
-  struct dirent *ent;
-
-  char *dirpath;
-  dirpath = user_dir_path;
-
-  dir = opendir(dirpath);
-
-  if (dir == NULL) {
-    return ERROR;
+void print_processes_list() {
+  list_t *aux = other_processes;
+  printf("-- Outros processos --\n");
+  if (aux == NULL) {
+    printf("lista vazia ...\n");
   }
-
-  int n;
-  message_t message;
-  char message_buffer[sizeof(message_t)];
-
-  // itera sobre os arquivos
-  while ((ent = readdir(dir)) != NULL) {
-    // para todas as entradas exceto . e ..
-    if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
-      char filepath[PATH_MAX_SIZE];
-      strcpy(filepath, dirpath);
-      strcat(filepath, ent->d_name);
-
-      printf("FILE: %s\n", ent->d_name);
-
-      // envia o nome do arquivo de volta para o cliente
-      config_message(&message, MSG_TYPE_DATA, MAX_PACKAGE_DATA_LENGTH, ent->d_name, ent->d_name);
-      memcpy(message_buffer, &message, sizeof(message));
-
-      n = sendto(socket_fd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &client_address, sizeof(struct sockaddr));
-      if (n < 0)
-  			printf("ERROR on sendto");
-
-  		n = recvfrom(socket_fd, message_buffer, sizeof(message_t), 0, (struct sockaddr *) &client_address, &client_length);
-  		if (n < 0)
-  			printf("ERROR on recvfrom");
-
-      // if (send_file(filepath) != SUCCESS) {
-      //   success = -1;
-      // }
-    }
+  while (aux != NULL) {
+    process_t *p = (process_t *) aux->value;
+    
+    printf("pid: %d\trole: %s\tip: %s\tport: %d\n", p->pid, p->role == 0 ? "primário" : "backup", p->ip, p->port);
+    
+    aux = aux->next;
   }
-  closedir (dir);
-
-  return success;
+  printf("----------------------\n\n");
 }
 
+process_t *get_process_from_message(message_t *msg, struct sockaddr_in cli_addr) {
+  // de-serializa dados do novo processo, que vieram junto na mensagem
+  process_t *new_process = malloc(sizeof(process_t));
+  memcpy(new_process, msg->data, sizeof(process_t));
+  
+  // salva o endereço do novo processo
+  char *ip_string = inet_ntoa(new_process->address.sin_addr);
+  memcpy(&new_process->address, &cli_addr, sizeof(cli_addr));
+  strcpy(new_process->ip, inet_ntoa(new_process->address.sin_addr));
 
+  return new_process;
+}
 
-// int main(int argc, char *argv[]) {
-// 	int sockfd, n;
-// 	socklen_t clilen;
-// 	struct sockaddr_in serv_addr, cli_addr;
-// 	char buf[MAX_PACKAGE_DATA_LENGTH];
-//
-//   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) printf("ERROR opening socket");
-//
-//   // inicializa username e user_dir_path
-//   username = malloc(sizeof(char) * PATH_MAX_SIZE);
-//   user_dir_path = malloc(sizeof(char) * PATH_MAX_SIZE);
-//
-// 	serv_addr.sin_family = AF_INET;
-// 	serv_addr.sin_port = htons(4000);
-// 	serv_addr.sin_addr.s_addr = INADDR_ANY;
-// 	bzero(&(serv_addr.sin_zero), 8);
-//
-// 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
-// 		printf("ERROR on binding");
-//
-//   socket_fd = sockfd;
-//
-// 	struct in_addr ip;
-// 	ip.s_addr = (unsigned long) serv_addr.sin_addr.s_addr;
-//
-// 	clilen = sizeof(struct sockaddr_in);
-//   message_t *msg = malloc(sizeof(message_t));
-//
-//   client_address = cli_addr;
-//   client_length = clilen;
-//
-//   char message_buffer[sizeof(message_t)];
-//
-// 	while (1) {
-//
-// 		/* receive from socket */
-// 		n = recvfrom(sockfd, message_buffer, sizeof(message_t), 0, (struct sockaddr *) &cli_addr, &clilen);
-// 		if (n < 0)
-// 			printf("ERROR on recvfrom");
-//
-//     memcpy(msg, message_buffer, sizeof(message_t));
-//
-//     // se recebeu uma mensagem de um client querendo fazer login
-//     if (msg->type == MSG_TYPE_LOGIN) {
-//       if (num_connections >= MAX_CONNECTIONS) {
-//         printf("Max connections reached\n");
-//         n = sendto(sockfd, "Max connections reached", MAX_PACKAGE_DATA_LENGTH, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//
-//         if (n  < 0)
-//     			printf("ERROR on sendto");
-//
-//       }
-//       else {
-//         printf("%s LOGGED IN\n", msg->data);
-//
-//         n = sendto(sockfd, "ok", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//     		if (n  < 0)
-//     			printf("ERROR on sendto");
-//
-//         // salva o nome do usuario
-//         strcpy(username, msg->data);
-//
-//         // cria uma string com o path completo "sync_dir_<USER NAME>/"
-//         strcpy(user_dir_path, "sync_dir_");
-//         strcat(user_dir_path, username);
-//         strcat(user_dir_path, "/");
-//
-//         printf("USER_DIR_PATH: %s\n", user_dir_path);
-//
-//         // se não existe o dir ainda, cria
-//         if(!dir_exists(user_dir_path)) {
-//           mkdir(user_dir_path, S_IRWXU | S_IRWXG | S_IRWXO);
-//         }
-//
-//         num_connections++;
-//       }
-//     }
-//
-//     // se recebeu uma mensagem que vai receber um arquivo
-//     else if (msg->type == MSG_TYPE_SEND_FILE) {
-//       n = sendto(sockfd, "ok, send file!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//   		if (n  < 0)
-//   			printf("ERROR on sendto");
-//     }
-//
-//     // se recebeu dados
-//     else if (msg->type == MSG_TYPE_DATA) {
-//       char data_on_right_size[MAX_PACKAGE_DATA_LENGTH + 1];
-//       memcpy(data_on_right_size, msg->data, msg->size);
-//       data_on_right_size[msg->size] = '\0';
-//
-//       printf(">> datagram with data:\n%s\nfilename: %s\n", data_on_right_size, msg->filename);
-//
-//       char *file;
-//       file = msg->filename;
-//       char *tld = strrchr(msg->filename, '/');
-//       if (tld != NULL) {
-//         tld += 1;
-//         file = tld;
-//       }
-//       printf("file: %s\n", file);
-//
-//       // cria um path juntando o "sync_dir_<USER NAME>/" com o nome do arquivo
-//       char *filepath = malloc(sizeof(char) * PATH_MAX_SIZE);
-//       strcpy(filepath, user_dir_path);
-//       strcat(filepath, file);
-//
-//       // ver se tem / no filepath. se tiver, pegar apenas ultima parte, que é o nome do arquivo mesmo
-//       printf("will write to: %s\n", filepath);
-//
-//       // escreve no arquivprintf("%s LOGGED IN\n", msg->data);
-//
-//       n = sendto(sockfd, "ok", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//   		if (n  < 0)
-//   			printf("ERROR on sendto");
-//
-//       // salva o nome do usuario
-//       strcpy(username, msg->data);
-//
-//       // cria uma string com o path completo "sync_dir_<USER NAME>/"
-//       strcpy(user_dir_path, "sync_dir_");
-//       strcat(user_dir_path, username);
-//       strcat(user_dir_path, "/");
-//
-//       printf("USER_DIR_PATH: %s\n", user_dir_path);
-//
-//       // se não existe o dir ainda, cria
-//       if(!dir_exists(user_dir_path)) {
-//         mkdir(user_dir_path, S_IRWXU | S_IRWXG | S_IRWXO);
-//       }
-//     }
-//
-//     // se recebeu uma mensagem que vai receber um arquivo
-//     else if (msg->type == MSG_TYPE_SEND_FILE) {
-//       n = sendto(sockfd, "ok, send file!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//   		if (n  < 0)
-//   			printf("ERROR on sendto");
-//     }
-//
-//     // se recebeu dados
-//     else if (msg->type == MSG_TYPE_DATA) {
-//       char data_on_right_size[MAX_PACKAGE_DATA_LENGTH + 1];
-//       memcpy(data_on_right_size, msg->data, msg->size);
-//       data_on_right_size[msg->size] = '\0';
-//
-//       printf(">> datagram with data:\n%s\nfilename: %s\n", data_on_right_size, msg->filename);
-//
-//       char *file;
-//       file = msg->filename;
-//       char *tld = strrchr(msg->filename, '/');
-//       if (tld != NULL) {
-//         tld += 1;
-//         file = tld;
-//       }
-//       printf("file: %s\n", file);
-//
-//       // cria um path juntando o "sync_dir_<USER NAME>/" com o nome do arquivo
-//       char *filepath = malloc(sizeof(char) * PATH_MAX_SIZE);
-//       strcpy(filepath, user_dir_path);
-//       strcat(filepath, file);
-//
-//       // ver se tem / no filepath. se tiver, pegar apenas ultima parte, que é o nome do arquivo mesmo
-//       printf("will write to: %s\n", filepath);
-//
-//       // escreve no arquivo
-//       write_to_file(filepath, data_on_right_size);
-//
-//       free(filepath);
-//
-//       n = sendto(sockfd, "got data!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//   		if (n  < 0)
-//   			printf("ERROR on sendto");
-//     }
-//
-//     // se recebeu requisição para enviar algum arquivo
-//     else if (msg->type == MSG_TYPE_GET_FILE) {
-//       // cria um path juntando o "sync_dir_<USER NAME>/" com o nome do arquivo
-//       char *filepath = malloc(sizeof(char) * PATH_MAX_SIZE);
-//       strcpy(filepath, user_dir_path);
-//       strcat(filepath, msg->filename);
-//
-//       if (!file_exists(filepath)) {
-//         n = sendto(sockfd, SERVER_FILE_NOT_FOUND, MAX_PACKAGE_DATA_LENGTH, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//       } else {
-//         n = sendto(sockfd, "ok", MAX_PACKAGE_DATA_LENGTH, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//         send_file(filepath);
-//       }
-//
-//       free(filepath);
-//     }
-//
-//     else if (msg->type == MSG_TYPE_LIST_SERVER) {
-//       // chama ls (funçao implementada mais pra cima)
-//       char *buffer = malloc(sizeof(char) * MAX_PACKAGE_DATA_LENGTH);
-//       ls(user_dir_path, buffer);
-//
-//       // envia o resultado de volta para o cliente
-//       message_t message;
-//       config_message(&message, MSG_TYPE_LIST_SERVER_RESPONSE, sizeof(buffer), buffer, "");
-//
-//       char message_buffer[sizeof(message_t)];
-//       memcpy(message_buffer, &message, sizeof(message));
-//
-//       int n = sendto(sockfd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//       if (n < 0) {
-//         printf("ERROR sendto");
-//         return ERROR;
-//       }
-//
-//       free(buffer);
-//     }
-//
-//     else if (msg->type == MSG_TYPE_DELETE_ALL) {
-//       // vai deletar tudo
-//       printf("Will clean.\n");
-//
-//       delete_all(user_dir_path);
-//
-//       // envia o resultado de volta para o cliente
-//       int n = sendto(sockfd, "ok", 12, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//       if (n < 0) {
-//         printf("ERROR sendto");
-//         return ERROR;
-//       }
-//     }
-//
-//     else if (msg->type == MSG_TYPE_GET_ALL) {
-//       // envia o resultado dizendo que ok
-//       int n = sendto(sockfd, "ok", 12, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//       if (n < 0) {
-//         printf("ERROR sendto");
-//         return ERROR;
-//       }
-//
-//       // espera o client dizer que está preparado
-//   		n = recvfrom(sockfd, message_buffer, sizeof(message_t), 0, (struct sockaddr *) &cli_addr, &clilen);
-//   		if (n < 0)
-//   			printf("ERROR on recvfrom");
-//
-//       // send_all();
-//       DIR *dir;
-//       int success = 0;
-//       struct dirent *ent;
-//
-//       char *dirpath;
-//       dirpath = user_dir_path;
-//
-//       dir = opendir(dirpath);
-//
-//       if (dir == NULL) {
-//         return ERROR;
-//       }
-//
-//       int j;
-//       message_t message;
-//       char message_buffer[sizeof(message_t)];
-//
-//       // itera sobre os arquivos
-//       while ((ent = readdir(dir)) != NULL) {
-//         // para todas as entradas exceto . e ..
-//         if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
-//           char filepath[PATH_MAX_SIZE];
-//           strcpy(filepath, dirpath);
-//           strcat(filepath, ent->d_name);
-//
-//           // envia o nome do arquivo de volta para o cliente
-//           config_message(&message, MSG_TYPE_DATA, MAX_PACKAGE_DATA_LENGTH, ent->d_name, ent->d_name);
-//           memcpy(message_buffer, &message, sizeof(message));
-//
-//           j = sendto(sockfd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//           if (j < 0)
-//       			printf("ERROR on sendto");
-//
-//           send_file(filepath);
-//         }
-//       }
-//       closedir (dir);
-//
-//       // avisa que acabaram os arquivos
-//       config_message(&message, MSG_END_OF_TRANSMISSION, MAX_PACKAGE_DATA_LENGTH, "", "");
-//       memcpy(message_buffer, &message, sizeof(message));
-//
-//       j = sendto(sockfd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//       if (j < 0)
-//         printf("ERROR on sendto");
-//     }
-//
-//     else if (msg->type == MSG_TYPE_LOGOUT) {
-//       num_connections--;
-//       printf("%s LOGGED OUT\n", msg->data);
-//       n = sendto(sockfd, "ok", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//   		if (n  < 0)
-//   			printf("ERROR on logout");
-//     }
-//
-//
-//     // senão...
-//     else {
-//       printf("Received a datagram: %s\n\n", message_buffer);
-//       n = sendto(sockfd, "Got some data\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-//   		if (n  < 0)
-//   			printf("ERROR on sendto");
-//     }
-//   }
-//
-// 	close(sockfd);
-// 	return 0;
-// }
-
-//
-// handle_client_requests: antinga main do dropboxServer
-//
-// função responsável por receber e tratar os requests do client
-//
-void *handle_client_requests(void *process) {
-	int sockfd, n;
+void *listen_to_other_processes() {
+  int sockfd, n;
 	socklen_t clilen;
 	struct sockaddr_in serv_addr, cli_addr;
 	char buf[MAX_PACKAGE_DATA_LENGTH];
-  
-  process_t *self;
-  self = (process_t *) process;
-  
-  printf("> Escutando mensagens do cliente na porta %d\n\n", self->port - PORT_OFFSET);
-  
+
   if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) == -1) printf("ERROR opening socket");
 
-  // inicializa username e user_dir_path
-  username = malloc(sizeof(char) * PATH_MAX_SIZE);
-  user_dir_path = malloc(sizeof(char) * PATH_MAX_SIZE);
-
 	serv_addr.sin_family = AF_INET;
-	serv_addr.sin_port = htons(self->port - PORT_OFFSET);
+	serv_addr.sin_port = htons(self.port);
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	bzero(&(serv_addr.sin_zero), 8);
 
-	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0)
-		printf("ERROR on binding");
-
-  socket_fd = sockfd;
-
-	struct in_addr ip;
-	ip.s_addr = (unsigned long) serv_addr.sin_addr.s_addr;
-
-	clilen = sizeof(struct sockaddr_in);
+	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0) {
+		printf("ERROR on binding\n");
+    // exit?
+  }
+  
+  internal_socket_id = sockfd;
+  
   message_t *msg = malloc(sizeof(message_t));
-
-  client_address = cli_addr;
-  client_length = clilen;
-
   char message_buffer[sizeof(message_t)];
-
-	while (1) {
-
-		/* receive from socket */
+    
+    
+  while(1) {
+    // receive message from other processes
 		n = recvfrom(sockfd, message_buffer, sizeof(message_t), 0, (struct sockaddr *) &cli_addr, &clilen);
 		if (n < 0)
 			printf("ERROR on recvfrom");
-
+      
     memcpy(msg, message_buffer, sizeof(message_t));
-
-    // se recebeu uma mensagem de um client querendo fazer login
-    if (msg->type == MSG_TYPE_LOGIN) {
-      if (num_connections >= MAX_CONNECTIONS) {
-        printf("Max connections reached\n");
-        n = sendto(sockfd, "Max connections reached", MAX_PACKAGE_DATA_LENGTH, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-
-        if (n  < 0)
-    			printf("ERROR on sendto");
-
-      }
-      else {
-        printf("%s LOGGED IN\n", msg->data);
-
-        n = sendto(sockfd, "ok", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-    		if (n  < 0)
-    			printf("ERROR on sendto");
-
-        // salva o nome do usuario
-        strcpy(username, msg->data);
-
-        // cria uma string com o path completo "sync_dir_<USER NAME>/"
-        strcpy(user_dir_path, "sync_dir_");
-        strcat(user_dir_path, username);
-        strcat(user_dir_path, "/");
-
-        printf("USER_DIR_PATH: %s\n", user_dir_path);
-
-        // se não existe o dir ainda, cria
-        if(!dir_exists(user_dir_path)) {
-          mkdir(user_dir_path, S_IRWXU | S_IRWXG | S_IRWXO);
-        }
-
-        num_connections++;
-      }
-    }
-
-    // se recebeu uma mensagem que vai receber um arquivo
-    else if (msg->type == MSG_TYPE_SEND_FILE) {
-      n = sendto(sockfd, "ok, send file!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-  		if (n  < 0)
-  			printf("ERROR on sendto");
-    }
-
-    // se recebeu dados
-    else if (msg->type == MSG_TYPE_DATA) {
-      // pega apenas a parte importante da área de dados da mensagem
-      char data_on_right_size[MAX_PACKAGE_DATA_LENGTH + 1];
-      memcpy(data_on_right_size, msg->data, msg->size);
-      data_on_right_size[msg->size] = '\0';
-
-      printf(">> datagram with data:\n%s\nfilename: %s\n", data_on_right_size, msg->filename);
-
-      char *file;
-      file = msg->filename;
-      char *tld = strrchr(msg->filename, '/');
-      if (tld != NULL) {
-        tld += 1;
-        file = tld;
-      }
-      printf("file: %s\n", file);
-
-      // cria um path juntando o "sync_dir_<USER NAME>/" com o nome do arquivo
-      char *filepath = malloc(sizeof(char) * PATH_MAX_SIZE);
-      strcpy(filepath, user_dir_path);
-      strcat(filepath, file);
-
-      // ver se tem / no filepath. se tiver, pegar apenas ultima parte, que é o nome do arquivo mesmo
-      printf("will write to: %s\n", filepath);
-
-      // escreve no arquivo
-      write_to_file(filepath, data_on_right_size);
-
-      n = sendto(sockfd, "ok", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-  		if (n  < 0)
-  			printf("ERROR on sendto");
-    }
-
-    // se recebeu uma mensagem que vai receber um arquivo
-    else if (msg->type == MSG_TYPE_SEND_FILE) {
-      n = sendto(sockfd, "ok, send file!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-  		if (n  < 0)
-  			printf("ERROR on sendto");
-    }
-
-    // se recebeu dados
-    else if (msg->type == MSG_TYPE_DATA) {
-      char data_on_right_size[MAX_PACKAGE_DATA_LENGTH + 1];
-      memcpy(data_on_right_size, msg->data, msg->size);
-      data_on_right_size[msg->size] = '\0';
-
-      printf(">> datagram with data:\n%s\nfilename: %s\n", data_on_right_size, msg->filename);
-
-      char *file;
-      file = msg->filename;
-      char *tld = strrchr(msg->filename, '/');
-      if (tld != NULL) {
-        tld += 1;
-        file = tld;
-      }
-      printf("file: %s\n", file);
-
-      // cria um path juntando o "sync_dir_<USER NAME>/" com o nome do arquivo
-      char *filepath = malloc(sizeof(char) * PATH_MAX_SIZE);
-      strcpy(filepath, user_dir_path);
-      strcat(filepath, file);
-
-      // ver se tem / no filepath. se tiver, pegar apenas ultima parte, que é o nome do arquivo mesmo
-      printf("will write to: %s\n", filepath);
-
-      // escreve no arquivo
-      write_to_file(filepath, data_on_right_size);
-
-      free(filepath);
-
-      n = sendto(sockfd, "got data!\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-  		if (n  < 0)
-  			printf("ERROR on sendto");
-    }
-
-    // se recebeu requisição para enviar algum arquivo
-    else if (msg->type == MSG_TYPE_GET_FILE) {
-      // cria um path juntando o "sync_dir_<USER NAME>/" com o nome do arquivo
-      char *filepath = malloc(sizeof(char) * PATH_MAX_SIZE);
-      strcpy(filepath, user_dir_path);
-      strcat(filepath, msg->filename);
-
-      if (!file_exists(filepath)) {
-        n = sendto(sockfd, SERVER_FILE_NOT_FOUND, MAX_PACKAGE_DATA_LENGTH, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-      } else {
-        n = sendto(sockfd, "ok", MAX_PACKAGE_DATA_LENGTH, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-        send_file(filepath);
-      }
-
-      free(filepath);
-    }
-
-    else if (msg->type == MSG_TYPE_LIST_SERVER) {
-      // chama ls (funçao implementada mais pra cima)
-      char *buffer = malloc(sizeof(char) * MAX_PACKAGE_DATA_LENGTH);
-      ls(user_dir_path, buffer);
-
-      // envia o resultado de volta para o cliente
-      message_t message;
-      config_message(&message, MSG_TYPE_LIST_SERVER_RESPONSE, sizeof(buffer), buffer, "");
-
-      char message_buffer[sizeof(message_t)];
-      memcpy(message_buffer, &message, sizeof(message));
-
-      int n = sendto(sockfd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-      if (n < 0) {
-        printf("ERROR sendto");
-        exit(ERROR);
-      }
-
-      free(buffer);
-    }
-
-    else if (msg->type == MSG_TYPE_DELETE_ALL) {
-      // vai deletar tudo
-      // printf("Will clean.\n");
-
-      delete_all(user_dir_path);
-
-      // envia o resultado de volta para o cliente
-      int n = sendto(sockfd, "ok", 12, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-      if (n < 0) {
-        printf("ERROR sendto");
-        exit(ERROR);
-      }
-    }
-
-    else if (msg->type == MSG_TYPE_GET_ALL) {
-      // envia o resultado dizendo que ok
-      int n = sendto(sockfd, "ok", 12, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-      if (n < 0) {
-        printf("ERROR sendto");
-        exit(ERROR);
-      }
-
-      // espera o client dizer que está preparado
-  		n = recvfrom(sockfd, message_buffer, sizeof(message_t), 0, (struct sockaddr *) &cli_addr, &clilen);
-  		if (n < 0)
-  			printf("ERROR on recvfrom");
-
-      // send_all();
-      DIR *dir;
-      int success = 0;
-      struct dirent *ent;
-
-      char *dirpath;
-      dirpath = user_dir_path;
-
-      dir = opendir(dirpath);
-
-      if (dir == NULL) {
-        printf("Dir NULL error\n");
-        exit(ERROR);
-      }
-
-      int j;
-      message_t message;
-      char message_buffer[sizeof(message_t)];
-
-      // itera sobre os arquivos
-      while ((ent = readdir(dir)) != NULL) {
-        // para todas as entradas exceto . e ..
-        if (strcmp(ent->d_name, ".") != 0 && strcmp(ent->d_name, "..") != 0) {
-          char filepath[PATH_MAX_SIZE];
-          strcpy(filepath, dirpath);
-          strcat(filepath, ent->d_name);
-
-          // envia o nome do arquivo de volta para o cliente
-          config_message(&message, MSG_TYPE_DATA, MAX_PACKAGE_DATA_LENGTH, ent->d_name, ent->d_name);
-          memcpy(message_buffer, &message, sizeof(message));
-
-          j = sendto(sockfd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-          if (j < 0)
-      			printf("ERROR on sendto");
-
-          send_file(filepath);
-        }
-      }
-      closedir (dir);
-
-      // avisa que acabaram os arquivos
-      config_message(&message, MSG_END_OF_TRANSMISSION, MAX_PACKAGE_DATA_LENGTH, "", "");
-      memcpy(message_buffer, &message, sizeof(message));
-
-      j = sendto(sockfd, message_buffer, sizeof(message_buffer), 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-      if (j < 0)
-        printf("ERROR on sendto");
-    }
-
-    else if (msg->type == MSG_TYPE_LOGOUT) {
-      num_connections--;
-      printf("%s LOGGED OUT\n", msg->data);
-      n = sendto(sockfd, "ok", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-  		if (n  < 0)
-  			printf("ERROR on logout");
-    }
-
-    // // senão...
-    // else {
-    //   printf("Received a datagram: %s\n\n", message_buffer);
-    //   n = sendto(sockfd, "Got some data\n", 17, 0,(struct sockaddr *) &cli_addr, sizeof(struct sockaddr));
-  	// 	if (n  < 0)
-  	// 		printf("ERROR on sendto");
-    // }
     
-    // Se o processo corrente é primário, deve repassar a mensagem aos secundários,
-    // não importa o tipo da mensagem
-    if (self->role == PRIMARY) {
-      broadcast_message_2(msg, &other_processes);
+    // se recebeu uma mensagem de um servidor backup querendo conectar
+    if (msg->type == _MSG_TYPE_CONNECT_PLEASE) {
+      
+      process_t *new_backup = get_process_from_message(msg, cli_addr);
+      new_backup->socket_id = sockfd;
+      new_backup->socket_id_2 = create_socket(new_backup->ip, new_backup->port - PORT_OFFSET, &(new_backup->address_2));
+      
+      // adiciona o novo processo na lista de outros processos
+      list_insert(&other_processes, new_backup);
+      
+      // responde dizendo OK
+      message_t message;
+      config_message(&message, _MSG_TYPE_CONNECTED, 0, "", "");
+      send_message2(sockfd, message, &(new_backup->address));
+      
+      // TODO: abrir socket na porta do processo - 1000 pra poder depois passar adiante as mensagens recebidas do client
+      
+      printf(BACKUP_CONNECTION_SUCCEDED, new_backup->pid);
+    }
+    
+    // se recebeu uma mensagem pedindo dados de um processo
+    else if (msg->type == _MSG_TYPE_PLEASE_GIVE_ME_PROCESSESS_DATA) {
+      int has_sent_self = FALSE;
+      char buffer[MAX_PACKAGE_DATA_LENGTH];
+      char buffer_ip[MAXNAME];
+      
+      message_t message;
+      process_t *p;
+      list_t *aux = other_processes;
+      
+      while(aux != NULL) {
+        // para cada processo existente na lista de processos, envia os dados dele para o novo processo
+        p = (process_t *) aux->value;
+        
+        // se não enviou a struct do próprio processo, envia primeiro
+        if (!has_sent_self) {
+          p = &self;
+          has_sent_self = TRUE;
+        
+        // se já enviou, avança na lista
+        } else {
+          aux = aux->next;
+        }
+        memcpy(buffer, p, sizeof(process_t));
+        
+        // envia os dados
+        config_message2(&message, _MSG_TYPE_PROCESS_DATA, 0, buffer, "");
+        send_message2(sockfd, message, &cli_addr);
+        
+        // espera o processo pedir mais um
+        n = recvfrom(sockfd, message_buffer, sizeof(message_t), 0, (struct sockaddr *) &cli_addr, &clilen);
+    		if (n < 0)
+    			printf("ERROR on recvfrom");
+      }
+      config_message(&message, _MSG_TYPE_END_OF_PROCESS_DATA, 0, "", "");
+      send_message2(sockfd, message, &cli_addr);
+    }
+    
+    // se for um backup dando oi para outro
+    else if (msg->type == _MSG_TYPE_BACKUP_TO_BACKUP_CONNECT_PLEASE) {
+			process_t *new_backup = get_process_from_message(msg, cli_addr);
+      new_backup->socket_id = sockfd;
+      
+      // adiciona o novo processo na lista de outros processos
+      list_insert(&other_processes, new_backup);
+      
+      print_processes_list();
+      
+      // responde dizendo OK
+      message_t message;
+      config_message(&message, _MSG_TYPE_CONNECTED, 0, "", "");
+      send_message2(sockfd, message, &(new_backup->address));
+    }
+    
+    // se for uma mensagem de healthcheck
+    else if (msg->type == _MSG_TYPE_ARE_YOU_OK) {
+      // printf("> I'm fine, thanks!\n");
+      
+      // responde dizendo OK
+      message_t message;
+      config_message(&message, MSG_TYPE_OK, 0, "", "");
+      send_message2(sockfd, message, &cli_addr);
+    }
+    
+    // se receber uma mensagem de outro processo avisando que o líder atual falhou
+    else if (msg->type == _MSG_TYPE_LEADER_HAS_FAILED) {
+      printf(BACKUP_HAS_BEEN_WARNED_OF_PRIMARY_FAILURE);
+      pthread_cancel(tid_healthcheck);
+    }
+    
+    // se receber uma mensagem de outro processo p iniciando uma eleição é porque
+    // o processo corrente tem pid maior que p.
+    //
+    // neste caso, o corrente vai enviar uma mensagem de eleição para os processos
+    // com pid maior que o seu e segue o baile
+    else if (msg->type == _MSG_TYPE_ELECTION) {
+      printf(BACKUP_RECEIVED_ELECTION_MESSAGE);
+      create_election();
+    }
+    
+    // se receber uma mensagem de outro processo dizendo que ele é o novo líder
+    else if (msg->type == _MSG_TYPE_I_AM_THE_LEADER) {
+      // cria um processo temporário com os dados atualizados que vieram na mensagem
+      process_t *new_leader = get_process_from_message(msg, cli_addr);
+      
+      // printf("O processo com pid %d é o novo líder.\n", new_leader->pid);
+      
+      // pega o processo com mesmo pid na lista other_processes
+      process_t *new_leader_in_list = get_process_from_pid(&other_processes, new_leader->pid);
+      
+      // remove o primário antigo da lista
+      remove_primary();
+      
+      // atualiza os dados do novo primário
+      new_leader_in_list->role = new_leader->role;
+      new_leader_in_list->port = new_leader->port;
+      
+      new_leader_in_list->socket_id = create_socket(new_leader_in_list->ip, new_leader_in_list->port, &(new_leader_in_list->address));
+      
+      printf(NEW_PRIMARY_CONNECTION_SUCCEDED, new_leader_in_list->pid);
+      print_processes_list();
+      
+      // cria novamente a thread que fica testando se o primário ainda está vivo
+      pthread_create(&tid_healthcheck, NULL, primary_healthcheck, NULL);
+      
+      // libera o temporário
+      free(new_leader);
     }
   }
+}
 
-	close(sockfd);
+void *primary_healthcheck() {
+  message_t message;
+  process_t *primary;
+  char buffer[MAX_PACKAGE_DATA_LENGTH];
+  
+  // configura mensagem perguntando se está tudo ok
+  config_message(&message, _MSG_TYPE_ARE_YOU_OK, 0, "", "");
+  
+  primary = get_primary(other_processes);
+  
+  while(1) {
+    usleep(HEALTHCHECK_FREQUENCY * 1000000);
+    // printf("> Are you ok, primary?\n");
+    
+    // envia mensagem
+    send_message2(primary->socket_id, message, &(primary->address));
+    
+    // configura timeout no socket
+    struct timeval tv;
+    tv.tv_sec = HEALTHCHECK_TIMEOUT;
+    tv.tv_usec = 0;
+    
+    if (setsockopt(primary->socket_id, SOL_SOCKET, SO_RCVTIMEO,&tv,sizeof(tv)) < 0) {
+        perror("Error");
+    }
+    
+    struct sockaddr_in from;
+    unsigned int length = sizeof(struct sockaddr_in);
+    
+    // se recv falhar devido ao timeout
+    if(recvfrom(primary->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &from, &length) < 0) {
+      printf(BACKUP_HAS_DETECTED_PRIMARY_FAILURE);
+      // avisa o pessoal que o primário falhou
+      warn_leader_failure();
+      
+      // inicia uma eleição
+      create_election();
+      
+      // printf("Se chegou aqui acho que a eleição já foi resolvida...\n");
+      
+      // cancela a thread atual de healthcheck
+      pthread_cancel(tid_healthcheck);
+    }
+  }
+}
+
+process_t *get_primary(list_t *head) {
+  list_t *aux = head;
+  
+  while (aux != NULL) {
+    if ((int) ((process_t *) aux->value)->role == PRIMARY) {
+      return aux->value;
+    }
+    aux = aux->next;
+  }
+  
+  return NULL;
+}
+
+// void handle_primary_failure() {
+//   // printf("Vou cancelar a thread de healthcheck e remover o primário!\n");
+//   // remove o primário da lista e avisa todo mundo que ele falhou
+//   remove_primary();
+//
+//   // pára a thread de healthcheck do primário
+//   pthread_cancel(tid_healthcheck);
+// }
+
+void remove_primary() {
+	// remove o processo primário da lista
+	process_t *primary = get_primary(other_processes);
+  if (primary != NULL) {
+    other_processes = list_remove_with_pid(other_processes, primary->pid);
+  }
+}
+
+void warn_leader_failure() {
+  // enviar mensagem pra todos dizendo para parar a thread de healthcheck pois já detectou falha!
+	message_t message;
+  config_message(&message, _MSG_TYPE_LEADER_HAS_FAILED, 0, "", "");
+  int count = broadcast_message(&message, &other_processes, 0);
+  
+  printf(BACKUP_HAS_WARNED_ABOUT_PRIMARY_FAILURE, count);
+  
+  // se não enviou pra ninguém, provavelmente é o único processo vivo ainda!
+  // neste caso, ele é o novo líder
+  if (count == 0) {
+    become_leader();
+    // printf("Ops, parece que tô sozinho nessa! Vou virar líder então!\n");
+  }
+}
+
+void create_election() {
+  // envia msg pra todos COM PID MAIOR QUE O SEU dizendo que houve uma falha no primário
+  message_t message;
+  config_message(&message, _MSG_TYPE_ELECTION, 0, "", "");
+  int count = broadcast_message(&message, &other_processes, self.pid);
+  
+  // se não houver nenhum com pid maior que o seu, este processo é o novo líder!
+  if (count == 0) {
+    printf(BACKUP_WITH_BIGGEST_PID_WILL_BECOME_LEADER);
+    become_leader();
+  }
+}
+
+void become_leader() {
+  // remove o antigo primário da sua lista
+  remove_primary();
+  print_processes_list();
+  
+  // atualiza seus valores
+  self.role = PRIMARY;
+  self.port = DEFAULT_PORT;
+  
+  printf(WATER_DIVIDER);
+  printf(SERVER_UP_AND_RUNNING);
+  
+  char self_data_buffer[MAX_PACKAGE_DATA_LENGTH];
+  memcpy(self_data_buffer, &self, sizeof(process_t));
+    
+  // envia pra todos
+  message_t message;
+  config_message(&message, _MSG_TYPE_I_AM_THE_LEADER, 0, self_data_buffer, "");
+  int count = broadcast_message(&message, &other_processes, 0);
+  
+  // cancela a thread de comunicação com os outros processos
+  // mas não se preocupe, ela será reiniciada quando a execução voltar à thread main
+  pthread_cancel(tid_listen);
+  
+  // reabre os sockets secundários para repassar as mensagens do cliente
+  open_secondary_sockets(&other_processes, &self);
+  
+  // printf("Cancelei a thread antiga de listen\n");
+  
+  //
+  // // reinicia a thread pra ficar escutando os outros processos
+  // pthread_create(&tid_listen, NULL, listen_to_other_processes, NULL);
+  // pthread_join(tid_listen, NULL);
+  //
+  // manda mensagem pra todos processos dizendo que é o novo líder
+  
+  // outros processos devem atualizar na lista que este é PRIMARY e sua nova porta é 5000
+  
+  // processos devem reconectar com primario?
+  // talvez:
+  
+  // fecha conexão com o socket antigo
+  // socket.close(new_primary->socket_id);
+  
+  // atualiza os dados e abre o novo socket
+  // new_primary->role = PRIMARY;
+  // new_primary->port = DEFAULT_PORT;
+  // new_primary->socket_id = create_socket(new_primary->ip, DEFAULT_PORT, &(new_primary->address));
+}
+
+//
+// main
+//
+int main(int argc, char **argv) {
+  if (argc < 2) {
+    printf(MISSING_PARAMETER);
+    exit(1);
+  }
+  
+  // inicializa struct que representa o própio processo (self)
+  init(argc, argv);
+  
+  printf(SERVER_UP_AND_RUNNING);
+
+  // se for um processo backup
+  if (self.role == BACKUP) {
+    
+    // conecta com o primário
+    connect_to_primary(argv[2], &other_processes, &self);
+
+    // e recebe do primário os dados dos outros processos backup para se conectar a eles também
+    get_other_processes_data(&other_processes, &self);
+    
+    // conecta aos outros processos backup
+    connect_to_others(argv, &other_processes, &self);
+    
+    // cria uma thread pra ficar testando se o primário ainda está vivo
+    pthread_create(&tid_healthcheck, NULL, primary_healthcheck, NULL);
+  }
+  
+  // se a thread for cancelada, será reerguida por motivos de rebinding caso um backup vire um líder
+  while(1) {
+    // cria uma thread pra ficar escutando os outros processos server
+    pthread_create(&tid_listen, NULL, listen_to_other_processes, NULL);
+    
+    // cria uma thread pra responder aos requests do cliente (parte 1 do trabalho)
+    pthread_create(&tid_client, NULL, handle_client_requests, (void *) &self);
+    
+    pthread_join(tid_listen, NULL);
+  }
+  
+  // tudo pronto, processo pode agir normalmente
+  // do_something();
 }
