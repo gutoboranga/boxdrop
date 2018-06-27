@@ -85,8 +85,6 @@ process_t *get_process_from_message(message_t *msg, struct sockaddr_in cli_addr)
   memcpy(&new_process->address, &cli_addr, sizeof(cli_addr));
   strcpy(new_process->ip, inet_ntoa(new_process->address.sin_addr));
 
-	printf("\nROLE: %d\nPORTA: %d\n", new_process->role, new_process->port);
-  
   return new_process;
 }
 
@@ -102,8 +100,6 @@ void *listen_to_other_processes() {
 	serv_addr.sin_port = htons(self.port);
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	bzero(&(serv_addr.sin_zero), 8);
-
-  printf("Will bind in port %d\n", self.port);
 
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(struct sockaddr)) < 0) {
 		printf("ERROR on binding\n");
@@ -137,7 +133,7 @@ void *listen_to_other_processes() {
       message_t message;
       config_message(&message, _MSG_TYPE_CONNECTED, 0, "", "");
       send_message2(sockfd, message, &(new_backup->address));
-      printf("respondi ok no ip %s e porta %d\n", new_backup->ip, new_backup->port);
+      
       printf(BACKUP_CONNECTION_SUCCEDED, new_backup->pid);
     }
     
@@ -181,12 +177,8 @@ void *listen_to_other_processes() {
     
     // se for um backup dando oi para outro
     else if (msg->type == _MSG_TYPE_BACKUP_TO_BACKUP_CONNECT_PLEASE) {
-			printf("recebi uma msg de um processo\n");
-      
-      process_t *new_backup = get_process_from_message(msg, cli_addr);
+			process_t *new_backup = get_process_from_message(msg, cli_addr);
       new_backup->socket_id = sockfd;
-      
-      printf("O PROCESSO NOVO TEM IP %s E PORTA %d\n", new_backup->ip, new_backup->port);
       
       // adiciona o novo processo na lista de outros processos
       list_insert(&other_processes, new_backup);
@@ -211,9 +203,8 @@ void *listen_to_other_processes() {
     
     // se receber uma mensagem de outro processo avisando que o líder atual falhou
     else if (msg->type == _MSG_TYPE_LEADER_HAS_FAILED) {
-      printf("\nTchê, parece que o nosso líder falhou...\n\n");
+      printf(BACKUP_HAS_BEEN_WARNED_OF_PRIMARY_FAILURE);
       pthread_cancel(tid_healthcheck);
-      printf("Parei a thread de healthcheck!\n");
     }
     
     // se receber uma mensagem de outro processo p iniciando uma eleição é porque
@@ -222,8 +213,7 @@ void *listen_to_other_processes() {
     // neste caso, o corrente vai enviar uma mensagem de eleição para os processos
     // com pid maior que o seu e segue o baile
     else if (msg->type == _MSG_TYPE_ELECTION) {
-      printf("OLHA O IMPEACHMENT AI GENTE!!\n");
-      
+      printf(BACKUP_RECEIVED_ELECTION_MESSAGE);
       create_election();
     }
     
@@ -237,33 +227,23 @@ void *listen_to_other_processes() {
       // pega o processo com mesmo pid na lista other_processes
       process_t *new_leader_in_list = get_process_from_pid(&other_processes, new_leader->pid);
       
-      printf("ANTES\n");
-      print_processes_list();
+      // remove o primário antigo da lista
+      remove_primary();
       
-      // atualiza os dados
+      // atualiza os dados do novo primário
       new_leader_in_list->role = new_leader->role;
       new_leader_in_list->port = new_leader->port;
       
-      printf("DEPOIS\n");
-      remove_primary();
+      new_leader_in_list->socket_id = create_socket(new_leader_in_list->ip, new_leader_in_list->port, &(new_leader_in_list->address));
+      
+      printf(NEW_PRIMARY_CONNECTION_SUCCEDED, new_leader_in_list->pid);
       print_processes_list();
       
-      printf("\nSocket id antes %d\n", new_leader_in_list->socket_id);
-      
-      new_leader_in_list->socket_id = create_socket(new_leader_in_list->ip, new_leader_in_list->port, &(new_leader_in_list->address));
-      printf("Socket id depois %d\n", new_leader_in_list->socket_id);
-      
-      // cria uma thread pra ficar testando se o primário ainda está vivo
+      // cria novamente a thread que fica testando se o primário ainda está vivo
       pthread_create(&tid_healthcheck, NULL, primary_healthcheck, NULL);
       
-      // fecha o socket antigo dele
-      // close(new_leader_in_list->socket_id);
-      
-      // reabre com a nova porta atualizada
-      // new_leader_in_list->socket_id = socket();
-      
       // libera o temporário
-      // free(new_leader);
+      free(new_leader);
     }
   }
 }
@@ -276,7 +256,7 @@ void *primary_healthcheck() {
   // configura mensagem perguntando se está tudo ok
   config_message(&message, _MSG_TYPE_ARE_YOU_OK, 0, "", "");
   
-  primary = (process_t *) other_processes->value;
+  primary = get_primary(other_processes);
   
   while(1) {
     usleep(HEALTHCHECK_FREQUENCY * 1000000);
@@ -299,14 +279,14 @@ void *primary_healthcheck() {
     
     // se recv falhar devido ao timeout
     if(recvfrom(primary->socket_id, buffer, MAX_PACKAGE_DATA_LENGTH, 0, (struct sockaddr *) &from, &length) < 0) {
-      printf("timeout!\n");
+      printf(BACKUP_HAS_DETECTED_PRIMARY_FAILURE);
       // avisa o pessoal que o primário falhou
       warn_leader_failure();
       
       // inicia uma eleição
       create_election();
       
-      printf("Se chegou aqui acho que a eleição já foi resolvida...\n");
+      // printf("Se chegou aqui acho que a eleição já foi resolvida...\n");
       
       // cancela a thread atual de healthcheck
       pthread_cancel(tid_healthcheck);
@@ -350,12 +330,13 @@ void warn_leader_failure() {
   config_message(&message, _MSG_TYPE_LEADER_HAS_FAILED, 0, "", "");
   int count = broadcast_message(&message, 0);
   
-  printf("\nAvisei a gurizada (%d processo(s)) que o líder falhou!\n\n", count);
+  printf(BACKUP_HAS_WARNED_ABOUT_PRIMARY_FAILURE, count);
   
   // se não enviou pra ninguém, provavelmente é o único processo vivo ainda!
   // neste caso, ele é o novo líder
   if (count == 0) {
-    printf("Ops, parece que tô sozinho nessa! Vou virar líder então!\n");
+    become_leader();
+    // printf("Ops, parece que tô sozinho nessa! Vou virar líder então!\n");
   }
 }
 
@@ -373,14 +354,9 @@ int broadcast_message(message_t *m, int pid) {
   
   aux = other_processes;
 
-  // printf("Estou no broadcast\n");
-  // print_processes_list();
-
 	while (aux != NULL) {
 		p = (process_t *) aux->value;
-    
-    printf("Pid recebido: %d\tp->pid: %d\n", pid, p->pid);
-    
+
     // se o pid do processo for maior que o recebido por parâmetro
     if (p->pid > pid && p->role != PRIMARY) {
       send_message2(p->socket_id, *m, &(p->address));
@@ -401,14 +377,12 @@ void create_election() {
   
   // se não houver nenhum com pid maior que o seu, este processo é o novo líder!
   if (count == 0) {
-    printf("Parece que eu tenho o maior pid! Vou virar líder então!\n");
+    printf(BACKUP_WITH_BIGGEST_PID_WILL_BECOME_LEADER);
     become_leader();
   }
 }
 
 void become_leader() {
-  printf("I AM THE KING NOW!!!\n");
-  
   // remove o antigo primário da sua lista
   remove_primary();
   print_processes_list();
@@ -416,6 +390,9 @@ void become_leader() {
   // atualiza seus valores
   self.role = PRIMARY;
   self.port = DEFAULT_PORT;
+  
+  printf(WATER_DIVIDER);
+  printf(SERVER_UP_AND_RUNNING);
   
   char self_data_buffer[MAX_PACKAGE_DATA_LENGTH];
   memcpy(self_data_buffer, &self, sizeof(process_t));
@@ -429,7 +406,7 @@ void become_leader() {
   // mas não se preocupe, ela será reiniciada quando a execução voltar à thread main
   pthread_cancel(tid_listen);
   
-  printf("Cancelei a thread antiga de listen\n");
+  // printf("Cancelei a thread antiga de listen\n");
   
   //
   // // reinicia a thread pra ficar escutando os outros processos
@@ -464,9 +441,7 @@ int main(int argc, char **argv) {
   // inicializa struct que representa o própio processo (self)
   init(argc, argv);
   
-  printf("Servidor %s rodando.\nPid: %d, Ip: %s, Porta: %d\n\n", self.role == 0 ? "primário" : "backup", self.pid, self.ip, self.port);
-  
-	printf("role: %d\n", self.role);
+  printf(SERVER_UP_AND_RUNNING);
 
   // se for um processo backup
   if (self.role == BACKUP) {
