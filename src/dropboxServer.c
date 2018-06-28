@@ -114,6 +114,7 @@ void *listen_to_other_processes() {
   message_t *msg = malloc(sizeof(message_t));
   char message_buffer[sizeof(message_t)];
     
+  clilen = sizeof(struct sockaddr_in);
     
   while(1) {
     // receive message from other processes
